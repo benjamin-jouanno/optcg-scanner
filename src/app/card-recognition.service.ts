@@ -443,7 +443,7 @@ export class CardRecognitionService {
   private async getUsdToEurRate(): Promise<number> {
     if (this.cachedUsdToEur && Date.now() - this.cachedUsdToEur.savedAt < 24 * 60 * 60 * 1000) return this.cachedUsdToEur.rate;
     try {
-      const stored = localStorage.getItem('grand-line-usd-eur-rate');
+      const stored = localStorage.getItem('grand-line-usd-eur-rate-v2');
       if (stored) {
         const cached = JSON.parse(stored) as { rate?: unknown; savedAt?: unknown };
         const rate = Number(cached.rate);
@@ -454,14 +454,16 @@ export class CardRecognitionService {
         }
       }
     } catch { /* Fetch a fresh rate if browser storage is unavailable. */ }
-    const response = await fetch('https://api.frankfurter.dev/v2/providers/ecb/rate/usd/eur', { headers: { Accept: 'application/json' } });
+    // The ECB publishes USD as a quote against EUR, so invert EUR/USD for USD/EUR.
+    const response = await fetch('https://api.frankfurter.dev/v2/providers/ecb/rate/eur/usd', { headers: { Accept: 'application/json' } });
     if (!response.ok) throw new Error(`Currency conversion failed (${response.status}).`);
     const data = await response.json() as { rate?: unknown };
-    const rate = Number(data.rate);
-    if (!Number.isFinite(rate) || rate <= 0) throw new Error('The USD/EUR exchange rate is invalid.');
+    const eurUsdRate = Number(data.rate);
+    if (!Number.isFinite(eurUsdRate) || eurUsdRate <= 0) throw new Error('The EUR/USD exchange rate is invalid.');
+    const rate = 1 / eurUsdRate;
     const savedAt = Date.now();
     this.cachedUsdToEur = { rate, savedAt };
-    try { localStorage.setItem('grand-line-usd-eur-rate', JSON.stringify({ rate, savedAt })); } catch { /* Keep the rate in memory. */ }
+    try { localStorage.setItem('grand-line-usd-eur-rate-v2', JSON.stringify({ rate, savedAt })); } catch { /* Keep the rate in memory. */ }
     return rate;
   }
 
@@ -506,13 +508,20 @@ export class CardRecognitionService {
     if (!forceRefresh && cached && Date.now() - cached.savedAt < 24 * 60 * 60 * 1000) return cached.cards;
     const endpoints = ['/api/allSetCards/', '/api/allSTCards/', '/api/allPromoCards/', '/api/allDonCards/'];
     try {
-      const responses = await Promise.all(endpoints.map(async (endpoint) => {
+      const responses = await Promise.allSettled(endpoints.map(async (endpoint) => {
         const response = await fetch(`https://www.optcgapi.com${endpoint}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error(`Card catalog request failed (${response.status}).`);
         return response.json() as Promise<unknown>;
       }));
-      const cards = this.parseCatalogPayloads(responses);
-      if (!cards.length) throw new Error('The card catalog returned no cards.');
+      const freshPayloads = responses.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
+      const freshCards = this.parseCatalogPayloads(freshPayloads);
+      if (!freshCards.length) {
+        if (cached?.cards.length) return cached.cards;
+        throw new Error('The card catalog returned no cards.');
+      }
+      const cardsByPrinting = new Map((cached?.cards ?? []).map((card) => [`${card.normalizedCode}|${card.normalizedName}`, card]));
+      for (const card of freshCards) cardsByPrinting.set(`${card.normalizedCode}|${card.normalizedName}`, card);
+      const cards = [...cardsByPrinting.values()];
       try {
         await this.writeCatalogCache(cards);
       } catch {
@@ -520,7 +529,7 @@ export class CardRecognitionService {
       }
       return cards;
     } catch (error) {
-      if (!forceRefresh && cached?.cards.length) return cached.cards;
+      if (cached?.cards.length) return cached.cards;
       throw error;
     }
   }
