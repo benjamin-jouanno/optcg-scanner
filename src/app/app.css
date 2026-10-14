@@ -94,8 +94,8 @@
 .sidebar-tip button { display: flex; justify-content: space-between; width: 100%; padding: 0; color: #8fd3e7; background: transparent; border: 0; font: inherit; font-size: 10px; cursor: pointer; }
 .settings { margin: 3px 0 9px; border-top: 1px solid var(--border); border-radius: 0; padding-top: 10px; height: 45px; }
 .profile-row { display: flex; align-items: center; gap: 9px; padding: 11px 5px 3px; border-top: 1px solid var(--border); }
-.avatar, .top-avatar { display: grid; flex: 0 0 auto; width: 31px; height: 31px; place-items: center; color: #10212a; background: linear-gradient(135deg, #f4cf7d, #e88a5e); border: 2px solid rgba(255,255,255,.14); border-radius: 50%; font-size: 11px; font-weight: 800; }
-.avatar img, .top-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.avatar { display: grid; flex: 0 0 auto; width: 31px; height: 31px; place-items: center; color: #10212a; background: linear-gradient(135deg, #f4cf7d, #e88a5e); border: 2px solid rgba(255,255,255,.14); border-radius: 50%; font-size: 11px; font-weight: 800; }
+.avatar img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .profile-copy { display: grid; gap: 3px; min-width: 0; }
 .profile-copy strong { font-size: 10px; font-weight: 650; }
 .profile-copy small { color: var(--muted); font-size: 9px; }
@@ -113,7 +113,6 @@
 .sync-state i { width: 6px; height: 6px; background: #7cce9a; border-radius: 50%; box-shadow: 0 0 9px rgba(124,206,154,.6); }
 .icon-button { position: relative; color: #b4c1c6; background: transparent; border: 0; font-size: 18px; cursor: pointer; }
 .icon-button b { position: absolute; top: 2px; right: 0; width: 5px; height: 5px; background: #f1c868; border: 1px solid #071016; border-radius: 50%; }
-.top-avatar { width: 29px; height: 29px; cursor: pointer; }
 .page-content { width: min(1340px, 100%); min-height: 0; flex: 1 1 auto; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; margin: 0 auto; padding: 28px 38px 20px; }
 .page-content::-webkit-scrollbar { display: none; }
 .welcome-row { position: relative; display: flex; align-items: end; justify-content: space-between; gap: 20px; min-height: 103px; margin: -8px -12px 13px; padding: 13px 12px 12px; overflow: hidden; isolation: isolate; border-radius: 11px; }
