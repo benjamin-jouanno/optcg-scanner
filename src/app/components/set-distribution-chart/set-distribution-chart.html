@@ -1,0 +1,18 @@
+@if (slices.length) {
+  <div class="set-distribution-chart" [class.compact]="compact">
+    <div class="set-pie" [style.background]="chartBackground" role="img" [attr.aria-label]="'Répartition de ' + total + ' cartes entre ' + slices.length + ' extensions'">
+      <div class="set-pie-center"><small>Cartes</small><strong>{{ total }}</strong></div>
+    </div>
+    <ul class="set-pie-legend" aria-label="Extensions et proportions">
+      @for (slice of slices; track slice.code) {
+        <li>
+          <span class="set-pie-key" [style.background]="slice.color" [style.color]="slice.color"></span>
+          <span class="set-pie-code">{{ slice.code }}</span>
+          <span class="set-pie-share">{{ slice.percentage | number:'1.0-0' }}%</span>
+        </li>
+      }
+    </ul>
+  </div>
+} @else {
+  <div class="set-pie-empty">Aucun numéro de carte à répartir par extension.</div>
+}

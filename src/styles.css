@@ -1,5 +1,6 @@
 * { box-sizing: border-box; }
 html { min-width: 320px; min-height: 100%; background: #071016; }
+app-root { display: block; height: 100vh; height: 100dvh; overflow: hidden; }
 body { min-width: 320px; min-height: 100vh; margin: 0; color: #f2f5f5; font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
 button, input { font-family: inherit; }
 button:focus-visible, input:focus-visible { outline: 2px solid #76cbe4; outline-offset: 3px; }
@@ -29,7 +30,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid #76cbe4; outline-
 .wallpaper-choice { display: grid; min-width: 0; gap: 5px; padding: 5px; color: #aab9bf; text-align: center; background: rgba(5,13,18,.3); border: 1px solid rgba(166,196,213,.12); border-radius: 6px; font: inherit; font-size: 8px; cursor: pointer; }
 .wallpaper-choice:hover { border-color: rgba(121,186,209,.52); }
 .wallpaper-choice.is-selected { color: #f4d782; background: rgba(232,198,110,.08); border-color: rgba(232,198,110,.72); box-shadow: 0 0 10px rgba(232,198,110,.12); }
-.wallpaper-choice-preview { display: block; width: 100%; aspect-ratio: 16 / 9; background: linear-gradient(180deg,rgba(7,16,22,.08),rgba(7,16,22,.34)),var(--app-wallpaper-image) center / cover no-repeat; border-radius: 3px; }
+.wallpaper-choice-preview { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: linear-gradient(180deg,rgba(7,16,22,.08),rgba(7,16,22,.34)),var(--app-wallpaper-image) center / cover no-repeat; border-radius: 3px; }
+.wallpaper-choice-preview > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .18s ease; }
+.wallpaper-choice-preview:has(> img[src]) > img { opacity: 1; }
+.wallpaper-image-loader { position: absolute; z-index: 1; inset: 0; display: grid; place-items: center; background: rgba(5,13,18,.42); }
+.wallpaper-image-loader::after { width: 16px; height: 16px; border: 2px solid rgba(205,226,232,.25); border-top-color: #8bd4e8; border-radius: 50%; content: ''; animation: wallpaper-loader-spin .75s linear infinite; }
+@keyframes wallpaper-loader-spin { to { transform: rotate(360deg); } }
 
 .manual-printing-scrim.has-scan-reference { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: clamp(8px,1.4vw,18px); padding: clamp(8px,1.5vw,18px); }
 .scanner-name-reference-panel { display: grid; flex: 0 0 clamp(112px,22vw,290px); align-content: center; justify-items: center; gap: 10px; width: clamp(112px,22vw,290px); max-height: min(92dvh,900px); padding: clamp(8px,1.2vw,16px); overflow: hidden; color: #e9eeee; text-align: center; background: linear-gradient(145deg,#15252f,#0d1921); border: 1px solid rgba(157,198,214,.2); border-radius: 13px; box-shadow: 0 24px 90px rgba(0,0,0,.55); }
@@ -75,7 +81,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid #76cbe4; outline-
 .camera-zoom-controls { display: grid; grid-template-columns: auto minmax(80px,1fr); align-items: center; gap: 12px; margin-top: 8px; }
 .camera-zoom-controls label { display: flex; align-items: center; gap: 6px; color: #98aab1; font-size: 9px; }
 .camera-zoom-controls label strong { min-width: 30px; color: #e8d58e; font-size: 9px; font-weight: 700; }
-.camera-zoom-controls input { width: 100%; height: 18px; margin: 0; accent-color: #e8c66e; cursor: pointer; }
+.camera-zoom-controls input[type="range"] { width: 100%; height: 18px; margin: 0; padding: 0; appearance: none; -webkit-appearance: none; background: transparent; cursor: pointer; }
+.camera-zoom-controls input[type="range"]::-webkit-slider-runnable-track { height: 4px; background: linear-gradient(90deg,rgba(232,198,110,.72),rgba(166,196,213,.24)); border: 1px solid rgba(166,196,213,.16); border-radius: 999px; }
+.camera-zoom-controls input[type="range"]::-moz-range-track { height: 4px; background: rgba(166,196,213,.24); border: 1px solid rgba(166,196,213,.16); border-radius: 999px; }
+.camera-zoom-controls input[type="range"]::-moz-range-progress { height: 4px; background: rgba(232,198,110,.72); border-radius: 999px; }
+.camera-zoom-controls input[type="range"]::-webkit-slider-thumb { width: 14px; height: 14px; margin-top: -6px; appearance: none; -webkit-appearance: none; background: #e8c66e; border: 2px solid #18242a; border-radius: 50%; box-shadow: 0 0 0 2px rgba(232,198,110,.24),0 0 9px rgba(232,198,110,.42); }
+.camera-zoom-controls input[type="range"]::-moz-range-thumb { width: 10px; height: 10px; background: #e8c66e; border: 2px solid #18242a; border-radius: 50%; box-shadow: 0 0 0 2px rgba(232,198,110,.24),0 0 9px rgba(232,198,110,.42); }
+.camera-zoom-controls input[type="range"]:focus-visible { outline: 2px solid rgba(131,222,233,.72); outline-offset: 4px; border-radius: 3px; }
 .recognition-debug { display: block; margin-top: 5px; overflow-wrap: anywhere; color: #74858c; font: 8px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
 .scanner-session { display: flex; flex-direction: column; min-height: 360px; max-height: 660px; overflow: hidden; }
 .scanner-side-column { display: grid; min-width: 0; align-content: start; gap: 10px; }
@@ -136,7 +148,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid #76cbe4; outline-
 .card-detail-actions .detail-action-delete { color: #df9a8d; }
 .card-detail-actions .detail-action-delete svg { color: #df9a8d; }
 .collection-card-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(190px,1fr)); gap: 20px 16px; padding: 20px; }
+app-collection-card-tile { display: block; width: 100%; min-width: 0; aspect-ratio: .70; }
 .collection-card-tile { position: relative; display: block; aspect-ratio: .70; min-width: 0; padding: 0; overflow: hidden; color: inherit; text-align: left; background: #11191e; border: 1px solid rgba(166,196,213,.2); border-radius: 10px; box-shadow: 0 8px 20px rgba(0,0,0,.2); font: inherit; cursor: pointer; transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
+app-collection-card-tile > .collection-card-tile { width: 100%; height: 100%; aspect-ratio: auto; }
 .collection-card-tile:hover, .collection-card-tile:focus-visible { transform: translateY(-3px); border-color: rgba(121,186,209,.34); box-shadow: 0 13px 26px rgba(0,0,0,.34); }
 .collection-card-tile.is-hit { overflow: visible; border-color: rgba(255,211,103,.96); box-shadow: 0 0 14px rgba(255,194,65,.74), 0 0 34px rgba(255,174,39,.48), 0 0 54px rgba(255,202,75,.2), inset 0 0 18px rgba(255,205,87,.14); }
 .collection-card-tile.is-hit .collection-card-art { border-radius: inherit; }

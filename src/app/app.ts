@@ -30,48 +30,24 @@ import {
   LucideTrendingUp,
   LucideX,
 } from '@lucide/angular';
-import { CardCondition, CardFinish, CollectionBackup, CollectionCard, CollectionStorageService } from './collection-storage.service';
-import { CardCodeReading, CardRecognitionService, IdentifiedCard } from './card-recognition.service';
+import { CollectionStorageService } from './services/collection-storage.service';
+import { CardCondition, CardFinish, CollectionBackup, CollectionCard } from './interfaces/collection-card';
+import { CardRecognitionService } from './services/card-recognition.service';
+import { CardCodeReading, IdentifiedCard } from './interfaces/identified-card';
+import { HomePage } from './pages/home/home-page';
+import { CollectionPage } from './pages/collection/collection-page';
+import { ScannerPage } from './pages/scanner/scanner-page';
+import { StatisticsPage } from './pages/statistics/statistics-page';
+import { OrganizationPage } from './pages/organization/organization-page';
 
-type Page = 'Accueil' | 'Ma collection' | 'Scanner' | 'Statistiques';
+type Page = 'Accueil' | 'Ma collection' | 'Organisation' | 'Scanner' | 'Statistiques';
 type ScanIndicatorState = 'idle' | 'missing' | 'detected' | 'added';
 type NavItem = { label: Page; icon: string };
 
 @Component({
   selector: 'app-root',
-  imports: [
-    DatePipe,
-    LucideArrowDownUp,
-    LucideArrowRight,
-    LucideArrowUpRight,
-    LucideBell,
-    LucideBookOpen,
-    LucideCamera,
-    LucideChartNoAxesCombined,
-    LucideCheck,
-    LucideCircleAlert,
-    LucideDollarSign,
-    LucideEllipsis,
-    LucideHeart,
-    LucideHouse,
-    LucideInfo,
-    LucideLayers,
-    LucideLibrary,
-    LucidePencil,
-    LucidePlus,
-    LucideRotateCcw,
-    LucideRotateCw,
-    LucideScanLine,
-    LucideSearch,
-    LucideShieldCheck,
-    LucideSparkles,
-    LucideStar,
-    LucideTrash2,
-    LucideTrendingUp,
-    LucideX,
-  ],
+  imports: [DatePipe, HomePage, CollectionPage, OrganizationPage, ScannerPage, StatisticsPage, LucideHouse, LucideLibrary, LucideScanLine, LucideChartNoAxesCombined, LucideSparkles, LucideArrowUpRight, LucideEllipsis, LucideSearch, LucideBell, LucideCircleAlert, LucideX, LucideLayers, LucideStar, LucidePencil, LucideTrash2],
   templateUrl: './app.html',
-  styleUrl: './app.css',
 })
 export class App implements OnDestroy {
   readonly testPhotoUrl = signal('');
@@ -82,9 +58,7 @@ export class App implements OnDestroy {
     { name: 'capture-024813.png', label: 'Capture 024813', url: '/testFiles/capture-024813.png' },
     { name: 'capture-024852.png', label: 'Capture 024852', url: '/testFiles/capture-024852.png' },
   ];
-  @ViewChild('cameraVideo') cameraVideo?: ElementRef<HTMLVideoElement>;
-  @ViewChild('importInput') importInput?: ElementRef<HTMLInputElement>;
-  @ViewChild('profileImageInput') profileImageInput?: ElementRef<HTMLInputElement>;
+  @ViewChild(ScannerPage) scannerPage?: ScannerPage;
 
   private readonly storage = inject(CollectionStorageService);
   private readonly recognition = inject(CardRecognitionService);
@@ -113,6 +87,7 @@ export class App implements OnDestroy {
   readonly manualChoiceFinish = signal<CardFinish>('Standard');
   readonly scanFinish = signal<CardFinish>('Standard');
   readonly showHitsOnly = signal(false);
+  readonly selectedExtension = signal('all');
   readonly priceSortDirection = signal<'asc' | 'desc' | null>(null);
   editAlternateArt = false;
   readonly scanIndicatorState = signal<ScanIndicatorState>('idle');
@@ -127,16 +102,19 @@ export class App implements OnDestroy {
   readonly profileNameDraft = signal('');
   readonly profileImageDraft = signal<string | null>(null);
   readonly wallpaperDraft = signal(0);
+  readonly wallpaperImagesLoaded = signal<Record<number, boolean>>({});
   readonly hitCardAnimationsDraft = signal(true);
   readonly profileSettingsError = signal('');
   readonly wallpaperOptions = Array.from({ length: 16 }, (_, index) => ({
     index,
     label: `Fond ${String(index + 1).padStart(2, '0')}`,
+    imageUrl: new URL(`../assets/wallpaper-${String(index + 1).padStart(2, '0')}.${index === 0 || index === 7 ? 'png' : index === 1 || index === 2 || index === 3 || index === 8 ? 'jpg' : 'jpeg'}`, import.meta.url).href,
   }));
 
   readonly navigation: NavItem[] = [
     { label: 'Accueil', icon: 'home' },
     { label: 'Ma collection', icon: 'collection' },
+    { label: 'Organisation', icon: 'organize' },
     { label: 'Scanner', icon: 'scanner' },
     { label: 'Statistiques', icon: 'stats' },
   ];
@@ -204,7 +182,9 @@ export class App implements OnDestroy {
     const query = this.collectionSearchTerm.trim().toLocaleLowerCase();
     const cards = this.collectionCards().filter((card) => {
       const matchesSearch = !query || `${card.name} ${card.code}`.toLocaleLowerCase().includes(query);
-      return matchesSearch && (!this.showHitsOnly() || this.isHit(card));
+      const matchesHitFilter = !this.showHitsOnly() || this.isHit(card);
+      const matchesExtension = this.selectedExtension() === 'all' || this.getExtensionCode(card.code) === this.selectedExtension();
+      return matchesSearch && matchesHitFilter && matchesExtension;
     });
     const direction = this.priceSortDirection();
     if (direction) {
@@ -215,6 +195,52 @@ export class App implements OnDestroy {
       });
     }
     return cards;
+  }
+
+  get collectionExtensionOptions(): { code: string; name: string | null }[] {
+    const codes = new Set(this.collectionCards().map((card) => this.getExtensionCode(card.code)).filter((code): code is string => Boolean(code)));
+    return [...codes]
+      .sort((a, b) => a.localeCompare(b, 'fr', { numeric: true }))
+      .map((code) => ({ code, name: this.extensionNames[code] ?? null }));
+  }
+
+  getExtensionName(code: string): string | null {
+    if (code === 'P — Promos') return 'Cartes promotionnelles';
+    if (/^ST-\d{2}$/.test(code)) return 'Deck de démarrage';
+    return this.extensionNames[code] ?? null;
+  }
+
+  private readonly extensionNames: Record<string, string> = {
+    'OP-01': 'Romance Dawn',
+    'OP-02': 'Paramount War',
+    'OP-03': 'Pillars of Strength',
+    'OP-04': 'Kingdoms of Intrigue',
+    'OP-05': 'Awakening of the New Era',
+    'OP-06': 'Wings of the Captain',
+    'OP-07': '500 Years in the Future',
+    'OP-08': 'Two Legends',
+    'OP-09': 'Les Nouveaux Empereurs',
+    'OP-10': 'Sang Royal',
+    'OP-11': 'Des poings vifs comme l\u2019\u00e9clair',
+    'OP-12': 'L\u2019H\u00e9ritage du Ma\u00eetre',
+    'OP-13': 'Successeurs',
+    'OP-14': 'Les Sept de la Mer d\u2019Azur',
+    'OP-15': 'Aventure sur l\u2019\u00cele de Dieu',
+    'OP-16': 'L\u2019Heure de la Bataille D\u00e9cisive',
+    'OP-17': 'Les Guerriers les plus puissants au monde',
+    'OP-18': 'The Dominance of God',
+    'EB-01': 'Memorial Collection',
+    'EB-02': 'Anime 25th Collection',
+    'EB-03': 'Heroines Edition',
+    'EB-04': 'Egghead Crisis',
+    'EB-05': 'Heroines Edition vol. 2',
+    'PRB-01': 'The Best',
+    'PRB-02': 'The Best vol. 2',
+  };
+
+  private getExtensionCode(cardCode: string): string | null {
+    const match = cardCode.trim().toUpperCase().match(/^([A-Z]+)\s*-?\s*(\d+)/);
+    return match ? `${match[1]}-${match[2].padStart(2, '0')}` : null;
   }
 
   get totalQuantity(): number {
@@ -310,6 +336,10 @@ export class App implements OnDestroy {
     this.wallpaperDraft.set(this.wallpaperIndex());
     this.profileSettingsError.set('');
     this.profileSettingsOpen.set(true);
+  }
+
+  markWallpaperImageLoaded(index: number): void {
+    this.wallpaperImagesLoaded.update((loaded) => loaded[index] ? loaded : { ...loaded, [index]: true });
   }
 
   closeProfileSettings(): void {
@@ -504,7 +534,7 @@ export class App implements OnDestroy {
         this.stopCamera();
         return;
       }
-      const video = this.cameraVideo?.nativeElement;
+      const video = this.scannerPage?.cameraVideo?.nativeElement;
       if (video) {
         video.srcObject = this.cameraStream;
         await video.play();
@@ -797,6 +827,13 @@ export class App implements OnDestroy {
     }
   }
 
+  async markCardsPhysicallySorted(cardIds: string[]): Promise<void> {
+    const selectedIds = new Set(cardIds);
+    await this.saveCollection(this.collectionCards().map((card) =>
+      selectedIds.has(card.id) ? { ...card, physicalSorted: true } : card,
+    ));
+  }
+
   private async saveCollection(cards: CollectionCard[]): Promise<void> {
     this.storageError.set('');
     try {
@@ -842,7 +879,7 @@ export class App implements OnDestroy {
   }
 
   private async scanLiveFrame(): Promise<void> {
-    const video = this.cameraVideo?.nativeElement;
+    const video = this.scannerPage?.cameraVideo?.nativeElement;
     const testImage = this.testPhotoImage;
     const videoReady = this.cameraActive() && !!video?.videoWidth;
     const imageReady = this.testPhotoActive() && !!testImage?.naturalWidth;
@@ -988,15 +1025,15 @@ export class App implements OnDestroy {
     this.recognitionStatus.set(`Ajoutée : ${identified.name} (${identified.code}). Retire-la du cadre avant le prochain scan.`);
   }
 
-  private async saveIdentifiedCard(identified: { code: string; name: string; variant: string; marketPrice: number | null; priceUpdatedAt?: string | null; imageUrl: string | null }, finish: CardFinish): Promise<void> {
+  private async saveIdentifiedCard(identified: { code: string; name: string; variant: string; marketPrice: number | null; priceUpdatedAt?: string | null; imageUrl: string | null; colors?: string[] }, finish: CardFinish): Promise<void> {
     const existing = this.collectionCards().find((card) => card.code.toUpperCase() === identified.code.toUpperCase() && card.finish === finish && card.variant === identified.variant);
     const now = new Date().toISOString();
     const updated: CollectionCard = existing
-      ? { ...existing, quantity: existing.quantity + 1, marketPrice: identified.marketPrice ?? existing.marketPrice, priceUpdatedAt: identified.priceUpdatedAt ?? existing.priceUpdatedAt, imageUrl: identified.imageUrl ?? existing.imageUrl, imageDataUrl: identified.imageUrl ? null : existing.imageDataUrl, addedAt: now }
+      ? { ...existing, quantity: existing.quantity + 1, physicalSorted: false, marketPrice: identified.marketPrice ?? existing.marketPrice, priceUpdatedAt: identified.priceUpdatedAt ?? existing.priceUpdatedAt, imageUrl: identified.imageUrl ?? existing.imageUrl, imageDataUrl: identified.imageUrl ? null : existing.imageDataUrl, colors: identified.colors?.length ? identified.colors : existing.colors, addedAt: now }
       : {
           id: this.newId(), name: identified.name, code: identified.code, variant: identified.variant,
           finish, condition: 'Near Mint', quantity: 1, marketPrice: identified.marketPrice, priceUpdatedAt: identified.priceUpdatedAt ?? null, favorite: false,
-          imageUrl: identified.imageUrl, imageDataUrl: null, addedAt: now,
+          imageUrl: identified.imageUrl, imageDataUrl: null, colors: identified.colors, physicalSorted: false, addedAt: now,
         };
     await this.saveCollection(existing
       ? this.collectionCards().map((card) => card.id === existing.id ? updated : card)
@@ -1024,7 +1061,7 @@ export class App implements OnDestroy {
 
     // Render a virtual camera viewport matching the portrait preview before cutting out
     // the fixed scan guide. This keeps the OCR coordinates aligned with what the user sees.
-    const stage = this.cameraVideo?.nativeElement.parentElement;
+    const stage = this.scannerPage?.cameraVideo?.nativeElement.parentElement;
     const stageRect = stage?.getBoundingClientRect();
     const stageWidth = 600;
     const stageHeight = stageRect?.width && stageRect.height

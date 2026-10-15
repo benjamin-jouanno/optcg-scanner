@@ -1,26 +1,6 @@
 import { Injectable } from '@angular/core';
 import Tesseract from 'tesseract.js';
-
-export interface IdentifiedCard {
-  code: string;
-  name: string;
-  marketPrice: number | null;
-  priceUpdatedAt?: string | null;
-  variant: string;
-  imageUrl: string | null;
-}
-
-export interface CardCodeReading {
-  code: string | null;
-  name: string;
-  rarity: string | null;
-  alternateArt: boolean;
-  cardDetected: boolean;
-  rawText: string;
-}
-
-export interface CardPriceRequest { id: string; code: string; name: string; variant: string; }
-export interface CardPriceResult { id: string; marketPrice: number; priceUpdatedAt: string; }
+import { CardCodeReading, CardPriceRequest, CardPriceResult, IdentifiedCard } from '../interfaces/identified-card';
 
 interface CatalogCard extends IdentifiedCard {
   normalizedCode: string;
@@ -84,7 +64,7 @@ export class CardRecognitionService {
   private cachedUsdToEur?: { rate: number; savedAt: number };
   private readonly catalogDbName = 'grand-line-card-catalog';
   private readonly catalogStoreName = 'catalog';
-  private readonly catalogCacheKey = 'all-cards-v3';
+  private readonly catalogCacheKey = 'all-cards-v4';
 
   async readCardCode(frame: HTMLCanvasElement): Promise<CardCodeReading> {
     const rectified = await this.rectifyCard(frame);
@@ -422,6 +402,12 @@ export class CardRecognitionService {
     return this.publicCardInEur(best.card);
   }
 
+  async getCardColorsByCode(codes: string[]): Promise<Record<string, string[]>> {
+    const catalog = await this.getCatalog();
+    const colorsByCode = new Map(catalog.filter((card) => card.colors?.length).map((card) => [card.normalizedCode, card.colors!]));
+    return Object.fromEntries(codes.map((code) => [code, colorsByCode.get(this.normalizeCode(code)) ?? []]));
+  }
+
   async findCardPrintings(code: string): Promise<IdentifiedCard[]> {
     const enteredPrefix = this.normalizeCode(code);
     if (!enteredPrefix) return [];
@@ -645,12 +631,18 @@ export class CardRecognitionService {
         if (typeof code !== 'string' || typeof name !== 'string' || !code.trim() || !name.trim()) continue;
         const image = data['card_image'] ?? data['card_image_url'] ?? data['image_url'];
         const marketPrice = this.parsePrice(data['market_price'] ?? data['marketPrice']);
+        const rawColors = data['card_color'] ?? data['colors'] ?? data['color'];
+        const colors = (Array.isArray(rawColors) ? rawColors : typeof rawColors === 'string' ? rawColors.split(/[\\/,|&+]+/) : [])
+          .filter((color): color is string => typeof color === 'string')
+          .map((color) => color.trim())
+          .filter(Boolean);
         const entry: CatalogCard = {
           code: code.trim(),
           name: name.trim(),
           marketPrice,
           variant: /(?:_p\d+|-(?:sec|sp|aa\d*|alt\d*)$)/i.test(code) || /parallel|alternate|manga|wanted poster|\(sp\)/i.test(name) ? 'Alternate art' : 'Standard',
           imageUrl: typeof image === 'string' && image.startsWith('https://') ? image : null,
+          colors: colors.length ? [...new Set(colors)] : undefined,
           normalizedCode: this.normalizeCode(code),
           normalizedName: this.normalizeName(name),
         };

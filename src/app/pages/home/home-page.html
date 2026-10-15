@@ -1,0 +1,31 @@
+        <section class="welcome-row">
+          <div><div class="eyebrow"><span class="eyebrow-line"></span> TON JOURNAL DE BORD</div><h1>Bienvenue, capitaine <span>!</span></h1><p>Ta collection One Piece, en un coup d'œil.</p></div>
+          <button class="primary-button" type="button" (click)="context.selectItem('Scanner')"><svg lucidePlus [size]="16"></svg> Scanner une carte</button>
+        </section>
+
+        <section class="stats-grid" aria-label="Résumé de la collection">
+          <article class="stat-card main-stat"><div class="stat-heading">Cartes possédées <span class="tiny-info"><svg lucideInfo [size]="10"></svg></span></div><div class="stat-number">{{ context.totalQuantity }}</div><div class="stat-foot">{{ context.uniqueCardCount }} fiches de cartes</div></article>
+          <article class="stat-card"><div class="stat-heading">Extensions identifiées <svg class="stat-symbol" lucideLayers [size]="13"></svg></div><div class="stat-number">{{ context.uniqueSetCount }}</div><div class="stat-caption">D’après les numéros de carte</div></article>
+          <article class="stat-card value-stat"><div class="stat-heading">Valeur renseignée <svg class="stat-symbol" lucideTrendingUp [size]="13"></svg></div><div class="stat-number">{{ context.formatPrice(context.collectionValue) }}</div><div class="stat-caption">Prix renseignés ou récupérés</div></article>
+          <article class="stat-card favorite-stat"><div class="stat-heading">Cartes favorites <svg class="favorite-star" lucideStar [size]="15"></svg></div><div class="stat-number">{{ context.favoriteCount }}</div><div class="stat-caption">Marquées dans ta collection</div></article>
+        </section>
+
+        <section class="content-grid">
+          <div class="recent-section">
+            <div class="section-heading"><div><div class="section-kicker">TON INVENTAIRE</div><h2>Dernières cartes ajoutées</h2></div><button class="text-button" type="button" (click)="context.selectItem('Ma collection')">Voir tout <svg lucideArrowRight [size]="14"></svg></button></div>
+            <div class="card-grid collection-card-grid home-collection-card-grid">
+              @for (card of context.visibleCards.slice(0, 5); track card.id) {
+                <app-collection-card-tile [card]="card" [context]="context" />
+              } @empty {
+                <div class="empty-search"><svg lucideLibrary [size]="22"></svg><strong>{{ context.collectionLoading() ? 'Chargement de ta collection…' : 'Ta collection commence ici' }}</strong><small>Scanne une carte ou importe une sauvegarde JSON.</small></div>
+              }
+            </div>
+            <div class="collection-note"><svg lucideShieldCheck [size]="12"></svg> Enregistré localement sur cet appareil <i>•</i> Exporte une sauvegarde pour le transférer.</div>
+          </div>
+          <aside class="sets-panel"><div class="sets-header"><div><div class="section-kicker">TON INVENTAIRE</div><h2>Cartes par extension</h2></div><button type="button" aria-label="Voir les statistiques" (click)="context.selectItem('Statistiques')"><svg lucideArrowUpRight [size]="14"></svg></button></div>
+            <app-set-distribution-chart [sets]="context.collectionSets" [compact]="true" />
+            <button class="all-sets-button" type="button" (click)="context.selectItem('Statistiques')">Voir les statistiques <svg lucideArrowRight [size]="14"></svg></button>
+          </aside>
+        </section>
+        @if (context.storageError()) { <div class="storage-warning"><svg lucideCircleAlert [size]="15"></svg>{{ context.storageError() }}</div> }
+        <footer class="page-footer"><span>GRAND LINE CARD LOG</span><span>Fait pour les collectionneurs, avec ♥</span><span class="demo-disclaimer">TES DONNÉES · TON APPAREIL</span></footer>

@@ -1,4 +1,4 @@
-<div class="app-shell" [attr.data-wallpaper]="profileSettingsOpen() ? wallpaperDraft() : wallpaperIndex()" [class.hit-animations-disabled]="!hitCardAnimationsEnabled()">
+﻿<div class="app-shell" [attr.data-wallpaper]="profileSettingsOpen() ? wallpaperDraft() : wallpaperIndex()" [class.hit-animations-disabled]="!hitCardAnimationsEnabled()">
   <aside class="sidebar">
     <button class="brand" type="button" (click)="selectItem('Accueil')" aria-label="Accueil">
       <img class="brand-logo" src="/assets/logo/logo.png" alt="One Piece Card Game" />
@@ -12,6 +12,7 @@
             @switch (item.icon) {
               @case ('home') { <svg lucideHouse [size]="17"></svg> }
               @case ('collection') { <svg lucideLibrary [size]="17"></svg> }
+              @case ('organize') { <svg lucideLayers [size]="17"></svg> }
               @case ('scanner') { <svg lucideScanLine [size]="17"></svg> }
               @case ('stats') { <svg lucideChartNoAxesCombined [size]="17"></svg> }
             }
@@ -50,123 +51,11 @@
     </header>
 
     <div class="page-content">
-      @if (activeItem === 'Accueil') {
-        <section class="welcome-row">
-          <div><div class="eyebrow"><span class="eyebrow-line"></span> TON JOURNAL DE BORD</div><h1>Bienvenue, capitaine <span>!</span></h1><p>Ta collection One Piece, en un coup d'œil.</p></div>
-          <button class="primary-button" type="button" (click)="selectItem('Scanner')"><svg lucidePlus [size]="16"></svg> Scanner une carte</button>
-        </section>
-
-        <section class="stats-grid" aria-label="Résumé de la collection">
-          <article class="stat-card main-stat"><div class="stat-heading">Cartes possédées <span class="tiny-info"><svg lucideInfo [size]="10"></svg></span></div><div class="stat-number">{{ totalQuantity }}</div><div class="stat-foot">{{ uniqueCardCount }} fiches de cartes</div></article>
-          <article class="stat-card"><div class="stat-heading">Extensions identifiées <svg class="stat-symbol" lucideLayers [size]="13"></svg></div><div class="stat-number">{{ uniqueSetCount }}</div><div class="stat-caption">D’après les numéros de carte</div></article>
-          <article class="stat-card value-stat"><div class="stat-heading">Valeur renseignée <svg class="stat-symbol" lucideTrendingUp [size]="13"></svg></div><div class="stat-number">{{ formatPrice(collectionValue) }}</div><div class="stat-caption">Prix renseignés ou récupérés</div></article>
-          <article class="stat-card favorite-stat"><div class="stat-heading">Cartes favorites <svg class="favorite-star" lucideStar [size]="15"></svg></div><div class="stat-number">{{ favoriteCount }}</div><div class="stat-caption">Marquées dans ta collection</div></article>
-        </section>
-
-        <section class="content-grid">
-          <div class="recent-section">
-            <div class="section-heading"><div><div class="section-kicker">TON INVENTAIRE</div><h2>Dernières cartes ajoutées</h2></div><button class="text-button" type="button" (click)="selectItem('Ma collection')">Voir tout <svg lucideArrowRight [size]="14"></svg></button></div>
-            <div class="card-grid collection-card-grid home-collection-card-grid">
-              @for (card of visibleCards.slice(0, 5); track card.id) {
-                <button class="collection-card-tile" type="button" [class.is-hit]="isHit(card)" [attr.aria-label]="'Afficher les détails de ' + card.name" (click)="openCardDetails(card)">
-                  <span class="collection-card-art">@if (card.imageUrl || card.imageDataUrl) { <img [src]="card.imageUrl || card.imageDataUrl" alt="" loading="lazy" /> } @else { <span class="collection-card-placeholder"><svg lucideLayers [size]="23"></svg><small>{{ card.code || 'ONE PIECE' }}</small></span> }</span>
-                  @if (isHit(card)) { <svg class="hit-orbit" viewBox="0 0 70 100" preserveAspectRatio="none" aria-hidden="true"><rect class="orbit-forward" x="1" y="1" width="68" height="98" rx="3" pathLength="100" /><rect class="orbit-second" x="1" y="1" width="68" height="98" rx="3" pathLength="100" /></svg> }
-                  <span class="collection-top-badges"><span class="collection-condition-badge">{{ card.condition }}</span><strong class="collection-card-price">{{ formatPrice(card.marketPrice) }}</strong></span>@if (card.quantity > 1) { <span class="collection-quantity">×{{ card.quantity }}</span> }
-                  <span class="collection-card-meta"><span class="collection-card-title"><strong [class.hit-card-name]="isRedHit(card)" [class.hit-card-name-gold]="isGoldHit(card)">{{ card.name }}</strong><small class="collection-card-code">{{ card.code || 'Numéro à identifier' }}</small></span>@if (card.variant === 'Alternate art' || card.finish === 'Foil') {<span class="collection-card-tags">@if (card.variant === 'Alternate art') {<small class="collection-card-tag">Alternative</small>} @if (card.finish === 'Foil') {<small class="collection-card-tag foil">Foil</small>}</span>}</span>
-                </button>
-              } @empty {
-                <div class="empty-search"><svg lucideLibrary [size]="22"></svg><strong>{{ collectionLoading() ? 'Chargement de ta collection…' : 'Ta collection commence ici' }}</strong><small>Scanne une carte ou importe une sauvegarde JSON.</small></div>
-              }
-            </div>
-            <div class="collection-note"><svg lucideShieldCheck [size]="12"></svg> Enregistré localement sur cet appareil <i>•</i> Exporte une sauvegarde pour le transférer.</div>
-          </div>
-          <aside class="sets-panel"><div class="sets-header"><div><div class="section-kicker">TON INVENTAIRE</div><h2>Cartes par extension</h2></div><button type="button" aria-label="Voir les statistiques" (click)="selectItem('Statistiques')"><svg lucideArrowUpRight [size]="14"></svg></button></div>
-            <div class="set-list">
-              @for (set of collectionSets; track set.code) { <div class="set-row"><span class="set-code">{{ set.code }}</span><span class="set-info"><span class="set-name">{{ set.count }} {{ set.count === 1 ? 'carte' : 'cartes' }}</span><span class="set-progress"><i [class]="set.color" [style.width.%]="set.progress"></i></span></span><span class="set-percent">{{ set.count }}</span></div> }
-              @empty { <div class="set-empty">Les extensions apparaîtront quand tu renseigneras les numéros des cartes.</div> }
-            </div>
-            <button class="all-sets-button" type="button" (click)="selectItem('Statistiques')">Voir les statistiques <svg lucideArrowRight [size]="14"></svg></button>
-          </aside>
-        </section>
-        @if (storageError()) { <div class="storage-warning"><svg lucideCircleAlert [size]="15"></svg>{{ storageError() }}</div> }
-        <footer class="page-footer"><span>GRAND LINE CARD LOG</span><span>Fait pour les collectionneurs, avec ♥</span><span class="demo-disclaimer">TES DONNÉES · TON APPAREIL</span></footer>
-      }
-
-      @if (activeItem === 'Ma collection') {
-        <section class="subpage-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> TON INVENTAIRE</div><h1>Ma collection<span>.</span></h1><p>Retrouve toutes tes cartes au même endroit.</p></div><button class="primary-button" type="button" (click)="selectItem('Scanner')"><svg lucidePlus [size]="16"></svg> Ajouter une carte</button></section>
-        <section class="collection-summary"><div class="summary-icon"><svg lucideLibrary [size]="18"></svg></div><div><strong>{{ totalQuantity }} {{ totalQuantity === 1 ? 'carte' : 'cartes' }}</strong><small>{{ uniqueCardCount }} fiches uniques · stockage local</small></div><span class="summary-spacer"></span><div class="summary-value"><small>Valeur renseignée</small><strong>{{ formatPrice(collectionValue) }}</strong></div></section>
-        @if (storageError()) { <div class="storage-warning"><svg lucideCircleAlert [size]="15"></svg>{{ storageError() }}</div> }
-        <section class="collection-panel">
-          <div class="collection-toolbar"><div><h2>Mes cartes <span>{{ collectionVisibleCards.length }}</span></h2><p>Importe une sauvegarde ou exporte une copie de tes données.</p></div><div class="toolbar-actions">
-            <label class="collection-hit-filter"><input type="checkbox" [checked]="showHitsOnly()" (change)="showHitsOnly.set($any($event.target).checked)" /> Hits uniquement</label>
-            <button class="outline-button price-sort-button" [class.is-active]="priceSortDirection() !== null" type="button" (click)="togglePriceSort()" [attr.aria-label]="priceSortDirection() === 'asc' ? 'Trier par prix croissant' : 'Trier par prix décroissant'">{{ priceSortDirection() === 'asc' ? 'Prix ↑' : priceSortDirection() === 'desc' ? 'Prix ↓' : 'Trier par prix' }}</button>
-            <button class="outline-button price-refresh-button" type="button" (click)="refreshCollectionPrices()" [disabled]="pricesRefreshing()"><svg lucideRotateCw [size]="14" [class.spinning]="pricesRefreshing()"></svg><span>{{ pricesRefreshing() ? 'Actualisation…' : 'Actualiser les prix' }}</span></button>
-            <input #importInput class="file-input-hidden" type="file" accept=".json,application/json" (change)="onImportFile($event)" />
-            <button class="outline-button" type="button" (click)="importInput.click()"><svg lucideArrowDownUp [size]="15"></svg> Importer JSON</button>
-            <button class="outline-button" type="button" (click)="exportCollection()"><svg lucideArrowUpRight [size]="15"></svg> Exporter</button>
-          </div></div>
-          <label class="collection-searchbar"><svg lucideSearch [size]="16"></svg><input type="search" placeholder="Rechercher par nom ou numéro…" [value]="collectionSearchTerm" (input)="onCollectionSearch($any($event.target).value)" aria-label="Rechercher une carte par nom ou numéro" /></label>
-          <p class="price-source-note">Prix marché du catalogue OPTCG API en USD, convertis en euros au taux de référence quotidien de la BCE. @if (priceRefreshMessage()) { <span>{{ priceRefreshMessage() }}</span> }</p>
-          <div class="collection-card-grid">
-            @for (card of collectionVisibleCards; track card.id) {
-              <button class="collection-card-tile" type="button" [class.is-hit]="isHit(card)" [attr.aria-label]="'Afficher les détails de ' + card.name" (click)="openCardDetails(card)">
-                <span class="collection-card-art">@if (card.imageUrl || card.imageDataUrl) { <img [src]="card.imageUrl || card.imageDataUrl" alt="" /> } @else { <span class="collection-card-placeholder"><svg lucideLayers [size]="23"></svg><small>{{ card.code || 'ONE PIECE' }}</small></span> }</span>
-                @if (isHit(card)) { <svg class="hit-orbit" viewBox="0 0 70 100" preserveAspectRatio="none" aria-hidden="true"><rect class="orbit-forward" x="1" y="1" width="68" height="98" rx="3" pathLength="100" /><rect class="orbit-second" x="1" y="1" width="68" height="98" rx="3" pathLength="100" /></svg> }
-                <span class="collection-top-badges"><span class="collection-condition-badge">{{ card.condition }}</span><strong class="collection-card-price">{{ formatPrice(card.marketPrice) }}</strong></span>@if (card.quantity > 1) { <span class="collection-quantity">×{{ card.quantity }}</span> }
-                <span class="collection-card-meta"><span class="collection-card-title"><strong [class.hit-card-name]="isRedHit(card)" [class.hit-card-name-gold]="isGoldHit(card)">{{ card.name }}</strong><small class="collection-card-code">{{ card.code || 'Numéro à identifier' }}</small></span>@if (card.variant === 'Alternate art' || card.finish === 'Foil') {<span class="collection-card-tags">@if (card.variant === 'Alternate art') {<small class="collection-card-tag">Alternative</small>} @if (card.finish === 'Foil') {<small class="collection-card-tag foil">Foil</small>}</span>}</span>
-              </button>
-            } @empty { <div class="collection-grid-empty">{{ collectionLoading() ? 'Chargement…' : collectionSearchTerm ? 'Aucune carte ne correspond à cette recherche.' : 'Aucune carte pour le moment. Scanne ta première carte ou importe un fichier JSON.' }}</div> }
-          </div>
-          <div class="table-foot"><span>{{ collectionVisibleCards.length }} {{ collectionVisibleCards.length === 1 ? 'fiche' : 'fiches' }} affichée{{ collectionVisibleCards.length > 1 ? 's' : '' }} · {{ totalQuantity }} cartes au total</span><button type="button" (click)="selectItem('Scanner')"><svg lucidePlus [size]="14"></svg> Scanner une carte</button></div>
-        </section>
-        <div class="privacy-note"><svg lucideShieldCheck [size]="15"></svg> Ta collection reste enregistrée sur cet appareil ; les visuels viennent du catalogue de cartes.</div>
-      }
-
-      @if (activeItem === 'Scanner') {
-        <section class="subpage-heading scanner-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> IDENTIFICATION DE CARTE</div><h1>Scanner<span>.</span></h1><p>Garde le numéro imprimé en bas de la carte visible devant ta webcam.</p></div><div class="local-badge"><i></i> OCR local</div></section>
-        <section class="scanner-layout">
-          <div class="scanner-main-panel">
-            <div class="scanner-panel-top"><div><h2>Capture de la carte</h2><p>Cadre une carte à la fois, face avant vers la caméra.</p></div><span class="camera-status" [class.live]="cameraActive() || testPhotoActive()"><i></i>{{ cameraActive() ? 'Caméra active' : testPhotoActive() ? 'Photo de test active' : 'Caméra inactive' }}</span></div>
-            <div class="scanner-source-actions">@if (!cameraActive()) { <button class="primary-button scanner-start-camera" type="button" (click)="startCamera()"><svg lucideCamera [size]="15"></svg> Activer la caméra</button> }<button class="outline-button scanner-test-photo" type="button" [disabled]="ocrWorking() || lookingUpCard()" (click)="openTestPhotoPicker()"><svg lucideScanLine [size]="14"></svg> Tester avec une photo</button>@if (testPhotoName()) { <small class="scanner-test-photo-name" [title]="testPhotoName()">{{ testPhotoName() }}</small> }</div>
-            <div class="camera-stage" [class.camera-live]="cameraActive()" [class.camera-quarter-turn]="cameraRotation() === 90 || cameraRotation() === 270" [class.camera-wide-view]="cameraZoom() < 1" [class.camera-test-photo]="testPhotoActive()" [style.--camera-rotation]="cameraRotation() + 'deg'" [style.--camera-zoom]="cameraZoom()">
-              <video #cameraVideo class="camera-video" autoplay playsinline muted></video>
-              @if (testPhotoActive()) { <img class="scanner-test-image" [src]="testPhotoUrl()" alt="Photo de test sélectionnée" /> }
-              <div class="scan-blur-overlay" aria-hidden="true"><span class="scan-blur-pane"></span><div class="scan-blur-middle"><span class="scan-blur-pane"></span><span class="scan-blur-window"></span><span class="scan-blur-pane"></span></div><span class="scan-blur-pane"></span></div>
-              @if (!cameraActive() && !testPhotoActive()) { <div class="camera-placeholder"><div class="camera-frame"><span class="corner top-left"></span><span class="corner top-right"></span><span class="corner bottom-left"></span><span class="corner bottom-right"></span><svg lucideCamera [size]="35"></svg></div><strong>Ta caméra apparaîtra ici</strong><small>Autorise l’accès à la webcam pour commencer.</small></div> }
-              @if (cameraActive() || testPhotoActive()) { <div class="ocr-stage-controls"><div class="ocr-working-indicator" [class.is-ready]="!ocrWorking()" [attr.aria-label]="ocrWorking() ? 'OCR en cours' : 'OCR prêt'" role="status"><i></i><span>OCR</span></div><button class="ocr-retry-button" type="button" (click)="scanNow()" aria-label="Relancer la reconnaissance maintenant" title="Relancer maintenant"><svg lucideSearch [size]="12"></svg> Relancer</button></div> }
-              <div class="scan-guide" [class.scan-missing]="scanIndicatorState() === 'missing'" [class.scan-detected]="scanIndicatorState() === 'detected'" [class.scan-added]="scanIndicatorState() === 'added'" aria-hidden="true"><span class="scan-corner top-left"></span><span class="scan-corner top-right"></span><span class="scan-corner bottom-left"></span><span class="scan-corner bottom-right"></span><span class="scan-guide-label">{{ scanIndicatorState() === 'missing' ? 'CARTE NON DÉTECTÉE' : scanIndicatorState() === 'added' ? 'CARTE AJOUTÉE' : scanIndicatorState() === 'detected' ? 'CARTE DÉTECTÉE' : 'ZONE DE SCAN' }}</span></div>
-              <div class="camera-stage-label"><svg lucideScanLine [size]="13"></svg> GARDE LE NUMÉRO DANS LE CADRE</div>
-            </div>
-            <div class="camera-rotate-controls"><span>Rotation caméra</span><div><button type="button" aria-label="Tourner la caméra à gauche de 90 degrés" title="Tourner à gauche" (click)="rotateCameraLeft()"><svg lucideRotateCcw [size]="15"></svg></button><button type="button" aria-label="Tourner la caméra à droite de 90 degrés" title="Tourner à droite" (click)="rotateCameraRight()"><svg lucideRotateCw [size]="15"></svg></button></div></div>
-            <div class="camera-zoom-controls"><label for="camera-zoom">Zoom <strong>{{ cameraZoom().toFixed(1) }}×</strong></label><input id="camera-zoom" type="range" min="0.5" max="2.5" step="0.1" [value]="cameraZoom()" (input)="setCameraZoom($any($event.target).value)" aria-label="Zoom de la caméra"></div>
-            <div class="recognition-status" role="status"><i></i>{{ recognitionStatus() }}</div>
-            @if ((cameraActive() || testPhotoActive()) && recognitionDebugText()) { <small class="recognition-debug">OCR lu : {{ recognitionDebugText() }}</small> }
-            @if (cameraError()) { <div class="camera-error"><svg lucideCircleAlert [size]="15"></svg>{{ cameraError() }}</div> }
-            <div class="scanner-actions"><div class="scanner-help"><svg lucideInfo [size]="14"></svg> Les cartes reconnues sont ajoutées automatiquement.</div>@if (!cameraActive()) { <button class="primary-button" type="button" (click)="startCamera()"><svg lucideCamera [size]="15"></svg> Activer la caméra</button> }</div>
-          </div>
-          <div class="scanner-side-column"><aside class="scanner-aside scanner-session"><div class="scanner-session-heading"><div><div class="section-kicker">CETTE SESSION</div><h2>Cartes ajoutées</h2></div><span>{{ scanSessionCards().length }}</span></div>
-            <div class="scanner-session-list">@for (card of scanSessionCards(); track card.id) { <article class="scanner-session-card"><button type="button" class="scanner-session-open" (click)="openCardDetails(card)" [attr.aria-label]="'Afficher les détails de ' + card.name">@if (card.imageUrl || card.imageDataUrl) { <img [src]="card.imageUrl || card.imageDataUrl" [alt]="''" /> } @else { <span class="session-image-placeholder"><svg lucideLayers [size]="15"></svg></span> }<span><strong>{{ card.name }}</strong><small>{{ card.code }} · {{ card.finish }} · Qté {{ card.quantity }}</small></span></button><div class="scanner-session-actions"><button type="button" [attr.aria-label]="'Modifier ' + card.name" title="Modifier" (click)="startEditingCard(card)"><svg lucidePencil [size]="13"></svg></button><button type="button" class="session-delete" [attr.aria-label]="'Supprimer ' + card.name" title="Supprimer" (click)="deleteCard(card)"><svg lucideTrash2 [size]="13"></svg></button></div></article> } @empty { <div class="scanner-session-empty"><svg lucideScanLine [size]="22"></svg><strong>Aucune carte ajoutée</strong><small>Les cartes reconnues pendant cette session apparaîtront ici.</small></div> }</div>
-          </aside>
-          <section class="scanner-manual-panel"><div class="section-kicker">AJOUT MANUEL</div><h2>Ajouter une carte</h2>
-            <div class="manual-card-lookup session-card-lookup"><label for="manual-card-code">Pas détectée ? Saisis son numéro de carte</label><div><input id="manual-card-code" type="text" placeholder="Ex. OP01-001" autocomplete="off" [disabled]="lookingUpCard()" [value]="manualCardCode" (input)="manualCardCode = $any($event.target).value" (keydown.enter)="lookupManualCard()" /><button type="button" class="outline-button" [disabled]="lookingUpCard() || !manualCardCode.trim()" (click)="lookupManualCard()">@if (lookingUpCard()) { Recherche… } @else { <svg lucideSearch [size]="14"></svg> Chercher }</button></div>@if (lookingUpCard() && !manualCardChoices().length) { <div class="manual-lookup-progress" role="progressbar" aria-label="Recherche des cartes en cours"><span></span></div> }</div>
-          </section></div>
-        </section>
-      }
-
-      @if (activeItem === 'Statistiques') {
-        <section class="subpage-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> VUE D’ENSEMBLE</div><h1>Statistiques<span>.</span></h1><p>Un aperçu calculé à partir de ta collection enregistrée.</p></div></section>
-        <section class="stats-overview-grid">
-          <article class="overview-card"><div class="overview-label">Cartes possédées <span class="overview-icon blue-icon"><svg lucideLayers [size]="16"></svg></span></div><strong>{{ totalQuantity }}</strong><div class="overview-foot">{{ uniqueCardCount }} fiches uniques</div></article>
-          <article class="overview-card"><div class="overview-label">Valeur renseignée <span class="overview-icon gold-icon"><svg lucideDollarSign [size]="16"></svg></span></div><strong>{{ formatPrice(collectionValue) }}</strong><div class="overview-foot">{{ totalQuantity }} cartes en collection</div></article>
-          <article class="overview-card"><div class="overview-label">Extensions identifiées <span class="overview-icon violet-icon"><svg lucideBookOpen [size]="16"></svg></span></div><strong>{{ uniqueSetCount }}</strong><div class="overview-foot">D’après les numéros saisis</div></article>
-          <article class="overview-card"><div class="overview-label">Cartes favorites <span class="overview-icon rose-icon"><svg lucideHeart [size]="16"></svg></span></div><strong>{{ favoriteCount }}</strong><div class="overview-foot">Marquées dans ta collection</div></article>
-        </section>
-        <section class="analytics-grid">
-          <article class="analytics-panel value-chart-panel"><div class="analytics-heading"><div><div class="section-kicker">ACTIVITÉ DE COLLECTION</div><h2>Cartes ajoutées par mois</h2></div><span class="period-select">12 derniers mois</span></div><div class="chart-summary"><strong>{{ currentMonthAdds }} {{ currentMonthAdds === 1 ? 'carte' : 'cartes' }}</strong><span>ce mois-ci</span></div><div class="chart-area"><div class="chart-gridlines"><i></i><i></i><i></i><i></i></div><div class="chart-bars">@for (bar of chartBars; track $index) { <div class="chart-bar-wrap"><i class="chart-bar" [style.height.%]="bar"></i><small>{{ monthLabels[$index] }}</small></div> }</div></div></article>
-          <article class="analytics-panel set-progress-panel"><div class="analytics-heading"><div><div class="section-kicker">RÉPARTITION</div><h2>Cartes par extension</h2></div><svg class="heading-icon" lucideChartNoAxesCombined [size]="16"></svg></div><div class="analytics-set-list">@for (set of collectionSets; track set.code) { <div class="analytics-set-row"><span class="set-code">{{ set.code }}</span><span class="set-info"><span class="set-name">{{ set.count }} {{ set.count === 1 ? 'carte' : 'cartes' }}</span><span class="set-progress"><i [class]="set.color" [style.width.%]="set.progress"></i></span></span><span class="set-percent">{{ set.count }}</span></div> } @empty { <div class="set-empty">Aucun numéro de carte à répartir par extension.</div> }</div><div class="set-progress-footer"><span>Extensions identifiées</span><strong>{{ uniqueSetCount }}</strong></div></article>
-        </section>
-        <section class="analytics-bottom"><div><svg lucideInfo [size]="15"></svg><span>La valeur utilise les prix unitaires que tu as saisis, multipliés par les quantités.</span></div><button type="button" (click)="selectItem('Ma collection')">Voir ma collection <svg lucideArrowRight [size]="14"></svg></button></section>
-      }
+      @if (activeItem === 'Accueil') { <app-home-page [context]="this"></app-home-page> }
+      @if (activeItem === 'Ma collection') { <app-collection-page [context]="this"></app-collection-page> }
+      @if (activeItem === 'Organisation') { <app-organization-page [context]="this"></app-organization-page> }
+      @if (activeItem === 'Scanner') { <app-scanner-page [context]="this"></app-scanner-page> }
+      @if (activeItem === 'Statistiques') { <app-statistics-page [context]="this"></app-statistics-page> }
     </div>
   </main>
 
@@ -268,7 +157,10 @@
           <div class="wallpaper-choice-grid">
             @for (wallpaper of wallpaperOptions; track wallpaper.index) {
               <button class="wallpaper-choice" type="button" [class.is-selected]="wallpaperDraft() === wallpaper.index" [attr.aria-pressed]="wallpaperDraft() === wallpaper.index" (click)="wallpaperDraft.set(wallpaper.index)">
-                <span class="wallpaper-choice-preview" [attr.data-wallpaper]="wallpaper.index"></span><span>{{ wallpaper.label }}</span>
+                <span class="wallpaper-choice-preview" [attr.data-wallpaper]="wallpaper.index">
+                  <img [src]="wallpaper.imageUrl" alt="" (load)="markWallpaperImageLoaded(wallpaper.index)" (error)="markWallpaperImageLoaded(wallpaper.index)" />
+                  @if (!wallpaperImagesLoaded()[wallpaper.index]) { <span class="wallpaper-image-loader" aria-label="Chargement de l’image"></span> }
+                </span><span>{{ wallpaper.label }}</span>
               </button>
             }
           </div>
@@ -281,3 +173,4 @@
   }
   @if (notice) { <div class="toast" role="status"><svg lucideSparkles [size]="15"></svg>{{ notice }}<button type="button" aria-label="Fermer" (click)="notice = ''"><svg lucideX [size]="14"></svg></button></div> }
 </div>
+

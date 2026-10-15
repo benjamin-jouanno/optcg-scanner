@@ -1,0 +1,18 @@
+.set-distribution-chart { display: grid; grid-template-columns: minmax(170px, 205px) minmax(0, 1fr); align-items: center; justify-items: center; gap: 19px; padding: 18px 4px 12px; }
+.set-pie { display: grid; width: 100%; max-width: 205px; aspect-ratio: 1; place-items: center; border: 1px solid rgba(231,245,255,.16); border-radius: 50%; box-shadow: inset 0 0 20px rgba(255,255,255,.16), 0 0 16px rgba(101,198,232,.31), 0 0 34px rgba(168,139,224,.21), 0 0 58px rgba(232,189,98,.12), 0 12px 30px rgba(0,0,0,.34); }
+.set-pie-center { display: grid; width: 57%; aspect-ratio: 1; align-content: center; justify-items: center; gap: 4px; background: radial-gradient(circle at 35% 28%, #1a2c36, #0b171e 72%); border: 1px solid rgba(194,226,239,.2); border-radius: 50%; box-shadow: 0 0 18px rgba(110,198,231,.15), inset 0 2px 14px rgba(0,0,0,.5); }
+.set-pie-center small { color: #a3b9c2; font-size: 10px; letter-spacing: .04em; }
+.set-pie-center strong { color: #f4f8f8; font-size: 27px; line-height: 1; text-shadow: 0 0 16px rgba(128,215,242,.4); }
+.set-pie-legend { display: grid; width: 100%; min-width: 0; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.set-pie-legend li { display: grid; min-width: 0; grid-template-columns: 10px minmax(0,1fr) auto; align-items: center; gap: 9px; }
+.set-pie-key { width: 10px; height: 10px; border-radius: 3px; box-shadow: 0 0 8px currentColor, 0 0 15px color-mix(in srgb, currentColor 58%, transparent); }
+.set-pie-code { overflow: hidden; color: #d0dbde; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.set-pie-share { color: #a5b5bb; font-size: 10px; font-variant-numeric: tabular-nums; }
+.set-pie-empty { padding: 17px 4px; color: #81929a; font-size: 8px; line-height: 1.5; }
+.set-distribution-chart.compact { grid-template-columns: minmax(0,1fr); gap: 15px; padding: 15px 0 9px; }
+.set-distribution-chart.compact .set-pie { width: min(100%,190px); }
+.set-distribution-chart.compact .set-pie-legend { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px 14px; }
+.set-distribution-chart.compact .set-pie-legend li { grid-template-columns: 9px minmax(0,1fr) auto; gap: 6px; }
+.set-distribution-chart.compact .set-pie-code { font-size: 9px; }
+.set-distribution-chart.compact .set-pie-share { font-size: 8px; }
+@media (max-width: 620px) { .set-distribution-chart:not(.compact) { grid-template-columns: minmax(130px,175px) minmax(0,1fr); gap: 12px; } .set-distribution-chart:not(.compact) .set-pie-legend { gap: 9px; } }
