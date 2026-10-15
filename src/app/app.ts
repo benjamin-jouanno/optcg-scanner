@@ -120,12 +120,14 @@ export class App implements OnDestroy {
   readonly wallpaperDraft = signal(0);
   readonly themeDraft = signal<'dark' | 'light'>('dark');
   readonly wallpaperImagesLoaded = signal<Record<number, boolean>>({});
+  readonly wallpaperImagesFailed = signal<Record<number, boolean>>({});
   readonly hitCardAnimationsDraft = signal(true);
   readonly profileSettingsError = signal('');
-  readonly wallpaperOptions = Array.from({ length: 16 }, (_, index) => ({
+  readonly wallpaperOptions = Array.from({ length: 17 }, (_, index) => ({
     index,
-    label: `Fond ${String(index + 1).padStart(2, '0')}`,
-    imageUrl: new URL(`../assets/wallpaper-${String(index + 1).padStart(2, '0')}.${index === 0 || index === 7 ? 'png' : index === 1 || index === 2 || index === 3 || index === 8 ? 'jpg' : 'jpeg'}`, import.meta.url).href,
+    label: index === 16 ? 'Mer animée' : `Fond ${String(index + 1).padStart(2, '0')}`,
+    animated: index === 16,
+    imageUrl: index === 16 ? '' : `/assets/wallpaper-previews/wallpaper-${String(index + 1).padStart(2, '0')}.webp`,
   }));
 
   readonly navigation: NavItem[] = [
@@ -392,6 +394,11 @@ export class App implements OnDestroy {
     this.wallpaperImagesLoaded.update((loaded) => loaded[index] ? loaded : { ...loaded, [index]: true });
   }
 
+  markWallpaperImageFailed(index: number): void {
+    this.wallpaperImagesLoaded.update((loaded) => loaded[index] ? loaded : { ...loaded, [index]: true });
+    this.wallpaperImagesFailed.update((failed) => ({ ...failed, [index]: true }));
+  }
+
   closeProfileSettings(): void {
     this.profileSettingsOpen.set(false);
   }
@@ -572,7 +579,11 @@ export class App implements OnDestroy {
 
   private readWallpaperIndex(): number {
     const stored = Number(this.readProfileSetting('grand-line-wallpaper'));
-    return Number.isInteger(stored) && stored >= 0 && stored < 16 ? stored : 0;
+    return Number.isInteger(stored) && stored >= 0 && stored < 17 ? stored : 0;
+  }
+
+  get activeWallpaperIndex(): number {
+    return this.profileSettingsOpen() ? this.wallpaperDraft() : this.wallpaperIndex();
   }
 
   private readTheme(): 'dark' | 'light' {

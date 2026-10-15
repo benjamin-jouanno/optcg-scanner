@@ -1,3 +1,4 @@
+<div class="home-page">
         <section class="welcome-row">
           <div><div class="eyebrow"><span class="eyebrow-line"></span> TON JOURNAL DE BORD</div><h1>Bienvenue, capitaine <span>!</span></h1><p>Ta collection One Piece, en un coup d'œil.</p></div>
           <button class="primary-button" type="button" (click)="context.selectItem('Scanner')"><svg lucidePlus [size]="16"></svg> Scanner une carte</button>
@@ -29,3 +30,4 @@
         </section>
         @if (context.storageError()) { <div class="storage-warning"><svg lucideCircleAlert [size]="15"></svg>{{ context.storageError() }}</div> }
         <footer class="page-footer"><span>GRAND LINE CARD LOG</span><span>Fait pour les collectionneurs, avec ♥</span><span class="demo-disclaimer">TES DONNÉES · TON APPAREIL</span></footer>
+</div>

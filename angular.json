@@ -24,6 +24,11 @@
                 "input": "public"
               },
               {
+                "glob": "**/*",
+                "input": "src/assets",
+                "output": "assets"
+              },
+              {
                 "glob": "ort-wasm-simd-threaded.mjs",
                 "input": "node_modules/onnxruntime-web/dist",
                 "output": "assets/onnxruntime"

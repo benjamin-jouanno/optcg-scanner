@@ -31,6 +31,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #76cbe4; outline-
 .scanner-test-samples-heading { margin-top: 18px; }
 .modal-scrim.scanner-test-picker-scrim .scanner-test-picker-dialog { width: min(780px,100%); }
 .profile-wallpaper-picker { display: grid; gap: 12px; margin-top: 15px; padding: 14px; background: rgba(5,13,18,.3); border: 1px solid rgba(166,196,213,.12); border-radius: 9px; }
+.file-input-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; clip-path: inset(50%); border: 0; }
 .profile-wallpaper-picker > div:first-child { display: grid; gap: 4px; }
 .profile-wallpaper-picker > div:first-child strong { color: #e9eeee; font-size: 10px; font-weight: 650; }
 .profile-wallpaper-picker > div:first-child small { color: #93a3aa; font-size: 8px; }
@@ -38,11 +39,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid #76cbe4; outline-
 .wallpaper-choice { display: grid; min-width: 0; gap: 7px; padding: 7px; color: #aab9bf; text-align: center; background: rgba(5,13,18,.3); border: 1px solid rgba(166,196,213,.12); border-radius: 7px; font: inherit; font-size: 9px; cursor: pointer; transition: transform .16s ease,border-color .16s ease,background .16s ease; }
 .wallpaper-choice:hover { transform: translateY(-2px); border-color: rgba(121,186,209,.52); }
 .wallpaper-choice.is-selected { color: #f4d782; background: rgba(232,198,110,.08); border-color: rgba(232,198,110,.72); box-shadow: 0 0 10px rgba(232,198,110,.12); }
-.wallpaper-choice-preview { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: linear-gradient(180deg,rgba(7,16,22,.08),rgba(7,16,22,.34)),var(--app-wallpaper-image) center / cover no-repeat; border-radius: 4px; }
+.wallpaper-choice-preview { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: linear-gradient(145deg,#172a34,#071118); border-radius: 4px; }
 .wallpaper-choice-preview > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .18s ease; }
-.wallpaper-choice-preview:has(> img[src]) > img { opacity: 1; }
+.wallpaper-choice-preview.is-loaded:not(.is-failed) > img { opacity: 1; }
+.wallpaper-choice-preview.is-failed::after { position: absolute; inset: 0; display: grid; place-items: center; color: #91a4ac; background: linear-gradient(145deg,#172a34,#071118); content: 'Aperçu indisponible'; font-size: 8px; }
 .wallpaper-image-loader { position: absolute; z-index: 1; inset: 0; display: grid; place-items: center; background: rgba(5,13,18,.42); }
 .wallpaper-image-loader::after { width: 16px; height: 16px; border: 2px solid rgba(205,226,232,.25); border-top-color: #8bd4e8; border-radius: 50%; content: ''; animation: wallpaper-loader-spin .75s linear infinite; }
+.wallpaper-choice-preview.is-animated { background: radial-gradient(ellipse at 50% 15%,#183f50,#081922 72%); }
+.wallpaper-preview-scene { position: absolute; inset: 0; display: block; overflow: hidden; background: radial-gradient(circle at 17% 24%,rgba(229,241,233,.75) 0 1px,transparent 1.7px),radial-gradient(circle at 82% 28%,rgba(229,241,233,.62) 0 1px,transparent 1.7px),linear-gradient(180deg,transparent 45%,rgba(11,66,83,.5)); }
+.wallpaper-preview-ship { position: absolute; bottom: 12%; left: 50%; width: 34%; height: 76%; background: url('./assets/logo/voguemerry.png') center / contain no-repeat; transform: translateX(-50%) scaleX(-1); }
+.wallpaper-preview-water { position: absolute; right: 0; bottom: 0; left: 0; height: 32%; background: linear-gradient(180deg,#146178,#0a3f54 36%,#062c3d); }
+.wallpaper-preview-water::before { position: absolute; top: -4px; right: -10%; left: -10%; height: 9px; border-top: 1px solid rgba(142,218,225,.7); border-radius: 50%; content: ''; box-shadow: 0 -2px 6px rgba(76,190,209,.35); }
 @keyframes wallpaper-loader-spin { to { transform: rotate(360deg); } }
 
 .manual-printing-scrim.has-scan-reference { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: clamp(8px,1.4vw,18px); padding: clamp(8px,1.5vw,18px); }

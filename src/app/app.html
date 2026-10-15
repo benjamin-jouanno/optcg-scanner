@@ -1,10 +1,31 @@
 ﻿<div class="app-shell" [attr.data-wallpaper]="profileSettingsOpen() ? wallpaperDraft() : wallpaperIndex()" [attr.data-theme]="profileSettingsOpen() ? themeDraft() : theme()" [class.hit-animations-disabled]="!hitCardAnimationsEnabled()">
   @if (splashVisible()) {
+    <div class="app-splash-backdrop" aria-hidden="true"></div>
     <div class="app-splash-screen" role="status" aria-label="Chargement de Grand Line Card Log" (animationend)="finishSplash($event)">
+      <div class="shooting-stars" aria-hidden="true"><span class="shooting-star shooting-star-a"></span><span class="shooting-star shooting-star-b"></span><span class="shooting-star shooting-star-c"></span></div>
       <img class="splash-logo" src="/assets/logo/logo.png" alt="Grand Line Card Log" />
       <span class="splash-title" aria-hidden="true">GRAND LINE CARD LOG</span>
       <span class="splash-loading-line" aria-hidden="true"></span>
       <div class="splash-sea" aria-hidden="true">
+        <div class="splash-ocean">
+          <svg class="splash-wave splash-wave-back" viewBox="0 0 2880 80" preserveAspectRatio="none">
+            <path d="M0 25 C180 4 310 6 460 24 S740 48 920 24 S1200 4 1380 22 Q1410 26 1440 25 L1440 80 L0 80 Z M1440 25 C1620 4 1750 6 1900 24 S2180 48 2360 24 S2640 4 2820 22 Q2850 26 2880 25 L2880 80 L1440 80 Z" />
+          </svg>
+          <div class="splash-ship-track"><span class="splash-ship"></span></div>
+          <svg class="splash-wave splash-wave-mid" viewBox="0 0 2880 80" preserveAspectRatio="none">
+            <path d="M0 31 C150 12 300 10 450 30 S750 51 900 29 S1200 10 1360 29 Q1400 33 1440 31 L1440 80 L0 80 Z M1440 31 C1590 12 1740 10 1890 30 S2190 51 2340 29 S2640 10 2800 29 Q2840 33 2880 31 L2880 80 L1440 80 Z" />
+          </svg>
+          <svg class="splash-wave splash-wave-front" viewBox="0 0 2880 80" preserveAspectRatio="none">
+            <path d="M0 41 C160 23 310 21 470 39 S770 61 930 39 S1230 21 1380 39 Q1410 43 1440 41 L1440 80 L0 80 Z M1440 41 C1600 23 1750 21 1910 39 S2210 61 2370 39 S2670 21 2820 39 Q2850 43 2880 41 L2880 80 L1440 80 Z" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  }
+  @if (activeWallpaperIndex === 16) {
+    <div class="animated-wallpaper" aria-hidden="true">
+      <div class="shooting-stars"><span class="shooting-star shooting-star-a"></span><span class="shooting-star shooting-star-b"></span><span class="shooting-star shooting-star-c"></span></div>
+      <div class="splash-sea">
         <div class="splash-ocean">
           <svg class="splash-wave splash-wave-back" viewBox="0 0 2880 80" preserveAspectRatio="none">
             <path d="M0 25 C180 4 310 6 460 24 S740 48 920 24 S1200 4 1380 22 Q1410 26 1440 25 L1440 80 L0 80 Z M1440 25 C1620 4 1750 6 1900 24 S2180 48 2360 24 S2640 4 2820 22 Q2850 26 2880 25 L2880 80 L1440 80 Z" />
@@ -203,9 +224,13 @@
           <div class="wallpaper-choice-grid">
             @for (wallpaper of wallpaperOptions; track wallpaper.index) {
               <button class="wallpaper-choice" type="button" [class.is-selected]="wallpaperDraft() === wallpaper.index" [attr.aria-pressed]="wallpaperDraft() === wallpaper.index" (click)="wallpaperDraft.set(wallpaper.index)">
-                <span class="wallpaper-choice-preview" [attr.data-wallpaper]="wallpaper.index">
-                  <img [src]="wallpaper.imageUrl" alt="" (load)="markWallpaperImageLoaded(wallpaper.index)" (error)="markWallpaperImageLoaded(wallpaper.index)" />
-                  @if (!wallpaperImagesLoaded()[wallpaper.index]) { <span class="wallpaper-image-loader" aria-label="Chargement de l’image"></span> }
+                <span class="wallpaper-choice-preview" [attr.data-wallpaper]="wallpaper.index" [class.is-animated]="wallpaper.animated" [class.is-loaded]="wallpaperImagesLoaded()[wallpaper.index]" [class.is-failed]="wallpaperImagesFailed()[wallpaper.index]">
+                  @if (wallpaper.animated) {
+                    <span class="wallpaper-preview-scene"><span class="wallpaper-preview-ship"></span><span class="wallpaper-preview-water"></span></span>
+                  } @else {
+                    <img [src]="wallpaper.imageUrl" alt="" loading="lazy" decoding="async" fetchpriority="low" (load)="markWallpaperImageLoaded(wallpaper.index)" (error)="markWallpaperImageFailed(wallpaper.index)" />
+                    @if (!wallpaperImagesLoaded()[wallpaper.index]) { <span class="wallpaper-image-loader" aria-label="Chargement de l’image"></span> }
+                  }
                 </span><span>{{ wallpaper.label }}</span>
               </button>
             }

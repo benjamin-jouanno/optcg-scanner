@@ -1,3 +1,4 @@
+.home-page { display: flex; min-height: 100%; flex-direction: column; }
 .welcome-row { position: relative; display: flex; align-items: end; justify-content: space-between; gap: 20px; min-height: 103px; margin: -8px -12px 13px; padding: 13px 12px 12px; overflow: hidden; isolation: isolate; border-radius: 11px; }
 .welcome-row::before { position: absolute; z-index: -1; inset: 0; background: linear-gradient(90deg, rgba(7,16,22,.02) 0%, rgba(7,16,22,.2) 45%, rgba(7,16,22,.68) 100%), radial-gradient(ellipse at 80% 50%, rgba(33, 98, 119, .2), transparent 52%); content: ''; }
 .welcome-row::after { position: absolute; z-index: -1; top: -38px; right: 12%; width: 190px; height: 220px; background: radial-gradient(ellipse, rgba(83,157,185,.15), transparent 70%); transform: rotate(7deg); content: ''; }
@@ -44,7 +45,7 @@
 .set-percent { color: #8b9ba2; font-size: 8px; text-align: right; }
 .all-sets-button { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 10px; padding: 9px 10px; color: #abd9e5; background: rgba(87,162,187,.08); border: 1px solid rgba(116,190,213,.13); border-radius: 6px; font: inherit; font-size: 9px; cursor: pointer; }
 .all-sets-button span { font-size: 14px; }
-.page-footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 31px; padding-top: 12px; color: #62717a; border-top: 1px solid rgba(166,196,213,.07); font-size: 7px; letter-spacing: .4px; }
+.page-footer { display: flex; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 12px; color: #62717a; border-top: 1px solid rgba(166,196,213,.07); font-size: 7px; letter-spacing: .4px; }
 .page-footer > span:first-child { color: #85949b; font-weight: 800; letter-spacing: 1px; }
 .demo-disclaimer { color: #b39b60; }
 @media (min-width: 1500px) {
@@ -105,7 +106,7 @@
 .set-list { grid-template-columns: 1fr; }
 }
 @media (max-width: 620px) {
-.page-footer { flex-wrap: wrap; margin-top: 24px; }
+.page-footer { flex-wrap: wrap; margin-top: auto; }
 }
 @media (max-width: 620px) {
 .page-footer > span:nth-child(2) { display: none; }
