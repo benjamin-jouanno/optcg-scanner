@@ -37,6 +37,7 @@ yarn-error.log
 /training/.venv/
 /training/.cache/
 /training/data/
+/training/checkpoints/
 __pycache__/
 *.py[cod]
 /libpeerconnection.log

@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import random
+import time
 from collections import defaultdict
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from torchvision import models, transforms
 
 DATASET = ROOT / "data" / "cards"
 OUTPUT = ROOT.parent / "public" / "assets" / "card-model"
+DEFAULT_CHECKPOINT = ROOT / "checkpoints" / "one-piece-cards.checkpoint.pt"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 MEAN = (0.485, 0.456, 0.406)
 STD = (0.229, 0.224, 0.225)
@@ -107,6 +109,45 @@ def contrastive_loss(first, second, codes, temperature=0.09):
     return -((log_probabilities * positive).sum(dim=1) / positive.sum(dim=1).clamp_min(1)).mean()
 
 
+def save_checkpoint(path: Path, model, optimizer, completed_epochs: int, args, items):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_name(path.name + ".tmp")
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "completed_epochs": completed_epochs,
+        "learning_rate": args.learning_rate,
+        "temperature": args.temperature,
+        "training_images": len(items),
+        "card_printings": len({item[0] for item in items}),
+    }
+    torch.save(checkpoint, temporary_path)
+    os.replace(temporary_path, path)
+
+
+def format_duration(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours:d}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes:02d}:{seconds:02d}"
+
+
+def show_batch_progress(epoch: int, total_epochs: int, batch: int, total_batches: int, loss: float, started_at: float):
+    elapsed = time.monotonic() - started_at
+    batches_done = batch
+    average_batch_time = elapsed / max(1, batches_done)
+    eta = average_batch_time * (total_batches - batches_done)
+    percent = batches_done / max(1, total_batches)
+    width = 24
+    filled = int(width * percent)
+    bar = "#" * filled + "." * (width - filled)
+    message = (
+        f"Epoch {epoch}/{total_epochs} [{bar}] {batches_done}/{total_batches} "
+        f"{percent:5.1%} | loss {loss:.4f} | elapsed {format_duration(elapsed)} | ETA {format_duration(eta)}"
+    )
+    print(f"\r{message:<120}", end="", flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=12)
@@ -114,6 +155,8 @@ def main():
     parser.add_argument("--learning-rate", type=float, default=0.00025)
     parser.add_argument("--temperature", type=float, default=0.09)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)
+    parser.add_argument("--fresh", action="store_true", help="Ignore any saved checkpoint and start from ImageNet weights.")
     args = parser.parse_args()
     random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -139,19 +182,42 @@ def main():
         raise SystemExit("Not enough card images for one training batch; lower --batch-size.")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = CardEmbedder().to(device)
+    print(f"Training set: {len(items)} images across {len({item[0] for item in items})} printings")
+    print(f"Device: {device} | batches per epoch: {len(loader)} | epochs this run: {args.epochs}")
+    resume = args.checkpoint.is_file() and not args.fresh
+    model = CardEmbedder(pretrained=not resume).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=0.0001)
-    for epoch in range(args.epochs):
+    completed_epochs = 0
+    if resume:
+        checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=True)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        # Keep the command-line learning rate authoritative when resuming.
+        for parameter_group in optimizer.param_groups:
+            parameter_group["lr"] = args.learning_rate
+        completed_epochs = int(checkpoint.get("completed_epochs", 0))
+        print(f"Resuming checkpoint after {completed_epochs} completed epochs: {args.checkpoint}")
+    else:
+        print("Starting from ImageNet MobileNetV3 weights and a new projection head.")
+
+    run_total_epochs = completed_epochs + args.epochs
+    for session_epoch in range(args.epochs):
         model.train()
         total_loss = 0.0
-        for first, second, codes in loader:
+        epoch_started_at = time.monotonic()
+        for batch_index, (first, second, codes) in enumerate(loader, start=1):
             first, second = first.to(device), second.to(device)
             optimizer.zero_grad(set_to_none=True)
             loss = contrastive_loss(model(first), model(second), codes, args.temperature)
             loss.backward()
             optimizer.step()
-            total_loss += loss.item()
-        print(f"Epoch {epoch + 1}/{args.epochs}: contrastive_loss={total_loss / len(loader):.4f}")
+            batch_loss = loss.item()
+            total_loss += batch_loss
+            show_batch_progress(completed_epochs + 1, run_total_epochs, batch_index, len(loader), batch_loss, epoch_started_at)
+        completed_epochs += 1
+        print()
+        save_checkpoint(args.checkpoint, model, optimizer, completed_epochs, args, items)
+        print(f"Epoch complete: mean contrastive loss={total_loss / len(loader):.4f} | checkpoint saved")
 
     model.eval().cpu()
     OUTPUT.mkdir(parents=True, exist_ok=True)

@@ -817,6 +817,10 @@ export class App implements OnDestroy {
     this.pendingDeletion.set(card);
   }
 
+  async deleteScanSessionCard(card: CollectionCard): Promise<void> {
+    await this.removeCardFromCollection(card);
+  }
+
   cancelCardDeletion(): void {
     this.pendingDeletion.set(null);
   }
@@ -824,6 +828,10 @@ export class App implements OnDestroy {
   async confirmCardDeletion(): Promise<void> {
     const card = this.pendingDeletion();
     if (!card) return;
+    await this.removeCardFromCollection(card);
+  }
+
+  private async removeCardFromCollection(card: CollectionCard): Promise<void> {
     const updated = this.collectionCards().filter((item) => item.id !== card.id);
     await this.saveCollection(updated);
     if (!this.storageError()) {
