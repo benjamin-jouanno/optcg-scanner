@@ -102,6 +102,7 @@
 .icon-button { position: relative; color: #b4c1c6; background: transparent; border: 0; font-size: 18px; cursor: pointer; }
 .icon-button b { position: absolute; top: 2px; right: 0; width: 5px; height: 5px; background: #f1c868; border: 1px solid #071016; border-radius: 50%; }
 .page-content { width: min(1340px, 100%); min-height: 0; flex: 1 1 auto; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; margin: 0 auto; padding: 28px 38px 20px; }
+.page-content.collection-page-content { display: flex; flex-direction: column; overflow-y: hidden; }
 .eyebrow, .section-kicker { display: flex; align-items: center; gap: 7px; color: #7e9aa7; font-size: 8px; font-weight: 800; letter-spacing: 1.4px; }
 .eyebrow-line { width: 16px; height: 1px; background: #67c3dd; }
 h1 { margin: 10px 0 6px; color: #f6f7f5; font-family: inherit; font-size: clamp(28px, 3.5vw, 39px); font-weight: 700; letter-spacing: -.9px; line-height: 1.1; }

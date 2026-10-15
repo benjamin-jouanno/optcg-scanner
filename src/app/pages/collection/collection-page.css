@@ -3,13 +3,16 @@
 .subpage-heading h1 span { color: #e8c36b; }
 .subpage-heading p { margin: 0; color: #9eacb3; font-size: 11px; }
 .collection-summary { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding: 13px 16px; background: linear-gradient(115deg, rgba(18,36,47,.96), rgba(13,25,34,.96)); border: 1px solid var(--border); border-radius: 9px; }
+.page-content.collection-page-content app-collection-page { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
+.page-content.collection-page-content .subpage-heading, .page-content.collection-page-content .collection-summary, .page-content.collection-page-content .privacy-note { flex: 0 0 auto; }
 .collection-summary > div:nth-child(2) { display: grid; gap: 4px; }
 .collection-summary > div:nth-child(2) strong { font-size: 12px; }
 .collection-summary small { color: #83949d; font-size: 9px; }
 .summary-spacer { flex: 1; }
 .summary-value { display: grid; gap: 4px; text-align: right; }
 .summary-value strong { color: #e7d39c; font-size: 13px; }
-.collection-panel { overflow: hidden; }
+.collection-panel { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; }
+.collection-panel > .collection-card-grid { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .collection-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 17px 18px 15px; border-bottom: 1px solid rgba(166,196,213,.09); }
 .collection-toolbar h2 { display: flex; align-items: center; gap: 8px; }
 .collection-toolbar h2 span { padding: 3px 6px; color: #92a6b0; background: rgba(180,202,214,.08); border-radius: 5px; font-size: 8px; font-weight: 600; }

@@ -50,7 +50,7 @@
       </div>
     </header>
 
-    <div class="page-content">
+    <div class="page-content" [class.collection-page-content]="activeItem === 'Ma collection'">
       @if (activeItem === 'Accueil') { <app-home-page [context]="this"></app-home-page> }
       @if (activeItem === 'Ma collection') { <app-collection-page [context]="this"></app-collection-page> }
       @if (activeItem === 'Organisation') { <app-organization-page [context]="this"></app-organization-page> }
