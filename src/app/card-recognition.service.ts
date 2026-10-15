@@ -95,9 +95,10 @@ export class CardRecognitionService {
     const worker = await this.getWorker();
     const codeCandidates: OcrCandidate[] = [];
     const codeRegions = [
-      // Card ID / rarity sit in the tiny footer at the bottom-right corner.
-      { x: 0.66, y: 0.93, width: 0.32, height: 0.065, mode: Tesseract.PSM.SINGLE_LINE },
-      // Wider fallback tolerates camera crop offsets and cards with a taller footer.
+      // The printed ID is immediately beside rarity and cost marks. Keep this first
+      // crop narrow enough that those marks cannot be mistaken for trailing digits.
+      { x: 0.71, y: 0.94, width: 0.18, height: 0.045, mode: Tesseract.PSM.SINGLE_LINE },
+      // Wider fallback tolerates different layouts and low-contrast footer text.
       { x: 0.48, y: 0.89, width: 0.50, height: 0.105, mode: Tesseract.PSM.SPARSE_TEXT },
     ];
 
@@ -114,10 +115,11 @@ export class CardRecognitionService {
       if (text) codeCandidates.push({ text, confidence: data.confidence ?? 0 });
     }
 
-    // The card name is printed below the rules text and immediately above the card-type line.
-    const nameCrop = this.prepareRegion(rectified.image, { x: 0.08, y: 0.77, width: 0.80, height: 0.12 }, 'name');
+    // The name is in the lower nameplate, below the card-type line. Cropping the
+    // rules-text area above it was returning ability text instead of the name.
+    const nameCrop = this.prepareRegion(rectified.image, { x: 0.08, y: 0.86, width: 0.84, height: 0.08 }, 'name');
     await worker.setParameters({
-      tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT,
+      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
       tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .\'-',
       preserve_interword_spaces: '1',
       user_defined_dpi: '300',
@@ -126,10 +128,17 @@ export class CardRecognitionService {
     const name = this.extractCardName(nameResult.data.text ?? '');
     const rawText = `ID: ${codeCandidates.map((item) => item.text).join(' / ')}; NAME: ${nameResult.data.text?.trim() ?? ''}`;
     const voted = this.voteForCode(codeCandidates);
-    if (!voted) {
+    let recovered: Pick<CardCodeReading, 'code' | 'rarity' | 'alternateArt'> | null = null;
+    try {
+      recovered = await this.recoverCodeFromCatalog(codeCandidates, name);
+    } catch {
+      // The normal OCR vote remains available when the online/local catalog is unavailable.
+    }
+    const identifiedCode = recovered ?? voted;
+    if (!identifiedCode) {
       return { code: null, name, rarity: null, alternateArt: false, cardDetected: true, rawText };
     }
-    return { ...voted, name, cardDetected: true, rawText };
+    return { ...identifiedCode, name, cardDetected: true, rawText };
   }
 
   private async rectifyCard(frame: HTMLCanvasElement): Promise<CardRectification> {
@@ -288,11 +297,83 @@ export class CardRecognitionService {
     return { code, rarity: parsed?.rarity ?? null, alternateArt: Boolean(parsed?.alternateArt) };
   }
 
+  private async recoverCodeFromCatalog(candidates: OcrCandidate[], recognizedName: string): Promise<Pick<CardCodeReading, 'code' | 'rarity' | 'alternateArt'> | null> {
+    const readings = candidates.flatMap((candidate) => {
+      const normalized = candidate.text.toUpperCase()
+        .replace(/[\u2014\u2013\u2212_]/g, '-')
+        .replace(/\b[0OQ6]P(?=\s*\d)/g, 'OP')
+        .replace(/\s+/g, ' ');
+      const setMatch = normalized.match(/\b(OP|ST|EB|PRB)\s*-?\s*([0-9OQ]{1,2})\s*-?\s*([0-9OQIL]{2,5})/);
+      const promoMatch = normalized.match(/\b(P|DON)\s*-?\s*([0-9OQIL]{2,5})/);
+      if (setMatch) {
+        return [{
+          set: `${setMatch[1]}${setMatch[2].replace(/[OQ]/g, '0').padStart(2, '0')}`,
+          number: setMatch[3].replace(/[OQ]/g, '0').replace(/[IL]/g, '1'),
+          alternateArt: Boolean(this.parseReading(candidate.text)?.alternateArt),
+          confidence: candidate.confidence,
+        }];
+      }
+      if (promoMatch) {
+        return [{
+          set: promoMatch[1],
+          number: promoMatch[2].replace(/[OQ]/g, '0').replace(/[IL]/g, '1'),
+          alternateArt: Boolean(this.parseReading(candidate.text)?.alternateArt),
+          confidence: candidate.confidence,
+        }];
+      }
+      return [];
+    });
+    // A name alone is ambiguous across reprints and alternate art. Leave code
+    // unresolved so the scanner can ask the collector to choose a catalog match.
+    if (!readings.length) return null;
+
+    const catalog = await this.getCatalog();
+    const ranked: Array<{ card: CatalogCard; distance: number; artMismatch: number; exactCodeMatch: number; nameSimilarity: number; confidence: number }> = [];
+    for (const reading of readings) {
+      const typedNumber = reading.number.slice(0, 3);
+      for (const card of catalog) {
+        const upperCode = card.code.toUpperCase();
+        let cardSet: string;
+        let cardNumber: string;
+        if (reading.set === 'P' || reading.set === 'DON') {
+          const codeParts = upperCode.match(/^(P|DON)[-_ ]?(\d{1,3})/);
+          if (!codeParts) continue;
+          cardSet = codeParts[1];
+          cardNumber = codeParts[2].padStart(3, '0');
+        } else {
+          const codeParts = upperCode.match(/^([A-Z]+)[-_ ]?(\d{1,2})[-_ ]?(\d{1,3})/);
+          if (!codeParts) continue;
+          cardSet = `${codeParts[1]}${codeParts[2].padStart(2, '0')}`;
+          cardNumber = codeParts[3].padStart(3, '0');
+        }
+        if (cardSet !== reading.set) continue;
+
+        const distance = this.editDistance(typedNumber, cardNumber);
+        if (distance > 1) continue;
+        ranked.push({
+          card,
+          distance,
+          artMismatch: (card.variant === 'Alternate art') === reading.alternateArt ? 0 : 1,
+          exactCodeMatch: this.normalizeCode(card.code) === this.normalizeCode(`${reading.set}-${cardNumber}`) ? 0 : 1,
+          nameSimilarity: this.nameSimilarity(this.normalizeName(recognizedName), card.normalizedName),
+          confidence: reading.confidence,
+        });
+      }
+    }
+    ranked.sort((a, b) => a.distance - b.distance || a.artMismatch - b.artMismatch || a.exactCodeMatch - b.exactCodeMatch || b.nameSimilarity - a.nameSimilarity || b.confidence - a.confidence);
+    const best = ranked[0];
+    if (!best) return null;
+    const second = ranked.find((item) => this.cardFamilyCode(item.card.code) !== this.cardFamilyCode(best.card.code));
+    if (second && second.distance === best.distance && second.artMismatch === best.artMismatch && second.exactCodeMatch === best.exactCodeMatch && Math.abs(second.nameSimilarity - best.nameSimilarity) < 0.08) return null;
+    const parsed = candidates.map((candidate) => this.parseReading(candidate.text)).find((item) => item?.code);
+    return { code: best.card.code, rarity: parsed?.rarity ?? null, alternateArt: best.card.variant === 'Alternate art' };
+  }
+
   private parseReading(rawText: string): Pick<CardCodeReading, 'code' | 'rarity' | 'alternateArt'> | null {
     const normalized = rawText.toUpperCase()
       .replace(/[—–−_]/g, '-')
       .replace(/[|!]/g, 'I')
-      .replace(/\b0P(?=\s*\d)/g, 'OP')
+      .replace(/\b[0OQ6]P(?=\s*\d)/g, 'OP')
       .replace(/\s+/g, ' ');
     const setMatch = normalized.match(/\b(OP|ST|EB|PRB)\s*-?\s*([0-9OQ]{1,2})\s*-?\s*([0-9OQIL]{1,3})\b/);
     const promoMatch = normalized.match(/\b(P|DON)\s*-?\s*([0-9OQIL]{1,3})\b/);
@@ -319,11 +400,13 @@ export class CardRecognitionService {
   }
 
   async findCard(code: string, recognizedName = '', requireNameMatch = false): Promise<IdentifiedCard | null> {
-    if (!recognizedName.trim() && !requireNameMatch) return this.lookupCardByCode(code);
     const catalog = await this.getCatalog();
     const normalizedCode = this.normalizeCode(code);
     const exact = catalog.filter((card) => card.normalizedCode === normalizedCode);
-    if (!recognizedName.trim()) return requireNameMatch ? null : exact.length ? this.publicCardInEur(exact[0]) : null;
+    if (!recognizedName.trim()) {
+      if (exact.length) return this.publicCardInEur(exact[0]);
+      return requireNameMatch ? null : this.lookupCardByCode(code);
+    }
 
     const nameKey = this.normalizeName(recognizedName);
     const candidates = catalog
@@ -372,6 +455,18 @@ export class CardRecognitionService {
       } catch { /* Report no results through the normal empty state. */ }
     }
     return [];
+  }
+
+  async findCardPrintingsByName(name: string): Promise<IdentifiedCard[]> {
+    const nameKey = this.normalizeName(name);
+    if (nameKey.length < 4) return [];
+    const catalog = await this.getCatalog();
+    const ranked = catalog
+      .map((card) => ({ card, similarity: this.nameSimilarity(nameKey, card.normalizedName) }))
+      .filter((item) => item.similarity >= 0.58)
+      .sort((a, b) => b.similarity - a.similarity || a.card.name.localeCompare(b.card.name) || a.card.code.localeCompare(b.card.code))
+      .slice(0, 40);
+    return Promise.all(ranked.map(({ card }) => this.publicCardInEur(card)));
   }
 
   private matchScore(codeDistance: number, nameSimilarity: number): number {

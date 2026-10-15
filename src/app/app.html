@@ -1,4 +1,4 @@
-<div class="app-shell" [attr.data-wallpaper]="wallpaperIndex()" [class.hit-animations-disabled]="!hitCardAnimationsEnabled()">
+<div class="app-shell" [attr.data-wallpaper]="profileSettingsOpen() ? wallpaperDraft() : wallpaperIndex()" [class.hit-animations-disabled]="!hitCardAnimationsEnabled()">
   <aside class="sidebar">
     <button class="brand" type="button" (click)="selectItem('Accueil')" aria-label="Accueil">
       <img class="brand-logo" src="/assets/logo/logo.png" alt="One Piece Card Game" />
@@ -126,20 +126,21 @@
         <section class="subpage-heading scanner-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> IDENTIFICATION DE CARTE</div><h1>Scanner<span>.</span></h1><p>Garde le numéro imprimé en bas de la carte visible devant ta webcam.</p></div><div class="local-badge"><i></i> OCR local</div></section>
         <section class="scanner-layout">
           <div class="scanner-main-panel">
-            <div class="scanner-panel-top"><div><h2>Capture de la carte</h2><p>Cadre une carte à la fois, face avant vers la caméra.</p></div><span class="camera-status" [class.live]="cameraActive()"><i></i>{{ cameraActive() ? 'Caméra active' : 'Caméra inactive' }}</span></div>
-            @if (!cameraActive()) { <button class="primary-button scanner-start-camera" type="button" (click)="startCamera()"><svg lucideCamera [size]="15"></svg> Activer la caméra</button> }
-            <div class="camera-stage" [class.camera-live]="cameraActive()" [class.camera-quarter-turn]="cameraRotation() === 90 || cameraRotation() === 270" [class.camera-wide-view]="cameraZoom() < 1" [style.--camera-rotation]="cameraRotation() + 'deg'" [style.--camera-zoom]="cameraZoom()">
+            <div class="scanner-panel-top"><div><h2>Capture de la carte</h2><p>Cadre une carte à la fois, face avant vers la caméra.</p></div><span class="camera-status" [class.live]="cameraActive() || testPhotoActive()"><i></i>{{ cameraActive() ? 'Caméra active' : testPhotoActive() ? 'Photo de test active' : 'Caméra inactive' }}</span></div>
+            <div class="scanner-source-actions">@if (!cameraActive()) { <button class="primary-button scanner-start-camera" type="button" (click)="startCamera()"><svg lucideCamera [size]="15"></svg> Activer la caméra</button> }<button class="outline-button scanner-test-photo" type="button" [disabled]="ocrWorking() || lookingUpCard()" (click)="openTestPhotoPicker()"><svg lucideScanLine [size]="14"></svg> Tester avec une photo</button>@if (testPhotoName()) { <small class="scanner-test-photo-name" [title]="testPhotoName()">{{ testPhotoName() }}</small> }</div>
+            <div class="camera-stage" [class.camera-live]="cameraActive()" [class.camera-quarter-turn]="cameraRotation() === 90 || cameraRotation() === 270" [class.camera-wide-view]="cameraZoom() < 1" [class.camera-test-photo]="testPhotoActive()" [style.--camera-rotation]="cameraRotation() + 'deg'" [style.--camera-zoom]="cameraZoom()">
               <video #cameraVideo class="camera-video" autoplay playsinline muted></video>
+              @if (testPhotoActive()) { <img class="scanner-test-image" [src]="testPhotoUrl()" alt="Photo de test sélectionnée" /> }
               <div class="scan-blur-overlay" aria-hidden="true"><span class="scan-blur-pane"></span><div class="scan-blur-middle"><span class="scan-blur-pane"></span><span class="scan-blur-window"></span><span class="scan-blur-pane"></span></div><span class="scan-blur-pane"></span></div>
-              @if (!cameraActive()) { <div class="camera-placeholder"><div class="camera-frame"><span class="corner top-left"></span><span class="corner top-right"></span><span class="corner bottom-left"></span><span class="corner bottom-right"></span><svg lucideCamera [size]="35"></svg></div><strong>Ta caméra apparaîtra ici</strong><small>Autorise l’accès à la webcam pour commencer.</small></div> }
-              @if (cameraActive() && ocrWorking()) { <div class="ocr-working-indicator" role="status"><i></i> OCR en cours</div> }
+              @if (!cameraActive() && !testPhotoActive()) { <div class="camera-placeholder"><div class="camera-frame"><span class="corner top-left"></span><span class="corner top-right"></span><span class="corner bottom-left"></span><span class="corner bottom-right"></span><svg lucideCamera [size]="35"></svg></div><strong>Ta caméra apparaîtra ici</strong><small>Autorise l’accès à la webcam pour commencer.</small></div> }
+              @if (cameraActive() || testPhotoActive()) { <div class="ocr-stage-controls"><div class="ocr-working-indicator" [class.is-ready]="!ocrWorking()" [attr.aria-label]="ocrWorking() ? 'OCR en cours' : 'OCR prêt'" role="status"><i></i><span>OCR</span></div><button class="ocr-retry-button" type="button" (click)="scanNow()" aria-label="Relancer la reconnaissance maintenant" title="Relancer maintenant"><svg lucideSearch [size]="12"></svg> Relancer</button></div> }
               <div class="scan-guide" [class.scan-missing]="scanIndicatorState() === 'missing'" [class.scan-detected]="scanIndicatorState() === 'detected'" [class.scan-added]="scanIndicatorState() === 'added'" aria-hidden="true"><span class="scan-corner top-left"></span><span class="scan-corner top-right"></span><span class="scan-corner bottom-left"></span><span class="scan-corner bottom-right"></span><span class="scan-guide-label">{{ scanIndicatorState() === 'missing' ? 'CARTE NON DÉTECTÉE' : scanIndicatorState() === 'added' ? 'CARTE AJOUTÉE' : scanIndicatorState() === 'detected' ? 'CARTE DÉTECTÉE' : 'ZONE DE SCAN' }}</span></div>
               <div class="camera-stage-label"><svg lucideScanLine [size]="13"></svg> GARDE LE NUMÉRO DANS LE CADRE</div>
             </div>
             <div class="camera-rotate-controls"><span>Rotation caméra</span><div><button type="button" aria-label="Tourner la caméra à gauche de 90 degrés" title="Tourner à gauche" (click)="rotateCameraLeft()"><svg lucideRotateCcw [size]="15"></svg></button><button type="button" aria-label="Tourner la caméra à droite de 90 degrés" title="Tourner à droite" (click)="rotateCameraRight()"><svg lucideRotateCw [size]="15"></svg></button></div></div>
             <div class="camera-zoom-controls"><label for="camera-zoom">Zoom <strong>{{ cameraZoom().toFixed(1) }}×</strong></label><input id="camera-zoom" type="range" min="0.5" max="2.5" step="0.1" [value]="cameraZoom()" (input)="setCameraZoom($any($event.target).value)" aria-label="Zoom de la caméra"></div>
             <div class="recognition-status" role="status"><i></i>{{ recognitionStatus() }}</div>
-            @if (cameraActive() && recognitionDebugText()) { <small class="recognition-debug">OCR lu : {{ recognitionDebugText() }}</small> }
+            @if ((cameraActive() || testPhotoActive()) && recognitionDebugText()) { <small class="recognition-debug">OCR lu : {{ recognitionDebugText() }}</small> }
             @if (cameraError()) { <div class="camera-error"><svg lucideCircleAlert [size]="15"></svg>{{ cameraError() }}</div> }
             <div class="scanner-actions"><div class="scanner-help"><svg lucideInfo [size]="14"></svg> Les cartes reconnues sont ajoutées automatiquement.</div>@if (!cameraActive()) { <button class="primary-button" type="button" (click)="startCamera()"><svg lucideCamera [size]="15"></svg> Activer la caméra</button> }</div>
           </div>
@@ -210,16 +211,36 @@
       </section>
     </div>
   }
+  @if (testPhotoPickerOpen()) {
+    <div class="modal-scrim scanner-test-picker-scrim" (click)="closeTestPhotoPicker()">
+      <section class="import-dialog scanner-test-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="test-photo-picker-title" (click)="$event.stopPropagation()">
+        <button class="dialog-close" type="button" aria-label="Fermer" (click)="closeTestPhotoPicker()"><svg lucideX [size]="16"></svg></button>
+        <div class="section-kicker">OUTIL DE TEST OCR</div><h2 id="test-photo-picker-title">Choisis une photo</h2>
+        <p>Sélectionne l’une des photos de test pour lancer la reconnaissance.</p>
+        <div class="scanner-test-photo-options">
+          @for (photo of testPhotos; track photo.url) {
+            <button class="scanner-test-photo-option" type="button" [disabled]="lookingUpCard()" (click)="selectTestPhoto(photo)">
+              <img [src]="photo.url" [alt]="photo.label" />
+              <span><strong>{{ photo.label }}</strong><small>{{ photo.name }}</small></span>
+            </button>
+          }
+        </div>
+        <div class="dialog-actions"><button class="outline-button" type="button" (click)="closeTestPhotoPicker()">Annuler</button></div>
+      </section>
+    </div>
+  }
   @if (manualCardChoices().length) {
-    <div class="modal-scrim manual-printing-scrim" (click)="cancelManualPrintingChoice()">
+    <div class="modal-scrim manual-printing-scrim" [class.has-scan-reference]="manualChoiceSource() === 'scanner-name' && !!scannerNameReference()" (click)="cancelManualPrintingChoice()">
+      @if (manualChoiceSource() === 'scanner-name' && scannerNameReference()) { <aside class="scanner-name-reference-panel" (click)="$event.stopPropagation()"><span class="section-kicker">PHOTO SCANNÉE</span><img [src]="scannerNameReference()" alt="Capture de la carte reconnue par le scanner" /><strong>{{ scannerRecognizedName() }}</strong><small>Compare cette carte avec les impressions proposées.</small></aside> }
       <section class="import-dialog manual-printing-dialog" role="dialog" aria-modal="true" aria-labelledby="manual-printing-title" (click)="$event.stopPropagation()">
         <div class="dialog-icon"><svg lucideLayers [size]="20"></svg></div>
         <button class="dialog-close" type="button" aria-label="Fermer" [disabled]="lookingUpCard()" (click)="cancelManualPrintingChoice()"><svg lucideX [size]="16"></svg></button>
         <div class="section-kicker">RÉSULTATS DU CATALOGUE</div><h2 id="manual-printing-title">Choisis ta carte</h2>
-        <p>Chaque résultat correspond à une impression précise. Son numéro, son illustration et son prix seront enregistrés.</p>
+        <p>{{ manualChoiceSource() === 'scanner-name' ? 'Le numéro est illisible : vérifie le nom détecté et choisis la bonne impression. Son numéro, son illustration et son prix seront enregistrés.' : 'Chaque résultat correspond à une impression précise. Son numéro, son illustration et son prix seront enregistrés.' }}</p>
+        <label class="printing-choice-search"><svg lucideSearch [size]="15"></svg><input type="search" placeholder="Filtrer par numéro…" aria-label="Filtrer les cartes par numéro" [value]="manualChoiceSearch" (input)="manualChoiceSearch = $any($event.target).value" /></label>
         <label class="manual-finish-select">Finition à ajouter<select [value]="manualChoiceFinish()" (change)="manualChoiceFinish.set($any($event.target).value)"><option value="Standard">Standard</option><option value="Foil">Foil</option></select></label>
         <div class="manual-printing-options">
-          @for (printing of manualCardChoices(); track printing.code + printing.name) {
+          @for (printing of filteredManualCardChoices; track printing.code + printing.name) {
             <button class="manual-printing-option" type="button" [class.is-hit]="isHit(printing)" [disabled]="lookingUpCard()" (click)="selectManualPrinting(printing)">
               <span class="manual-printing-art">@if (printing.imageUrl) { <img [src]="printing.imageUrl" alt="" /> } @else { <span class="manual-printing-placeholder"><svg lucideLayers [size]="24"></svg><small>{{ printing.code }}</small></span> }</span>
               <span class="manual-printing-variant">{{ printing.variant === 'Alternate art' ? 'Alternative' : 'Standard' }}</span>
@@ -227,6 +248,7 @@
               <span class="manual-printing-meta"><strong [class.hit-card-name]="isRedHit(printing)" [class.hit-card-name-gold]="isGoldHit(printing)">{{ printing.name }}</strong><small>{{ printing.code }}</small></span>
             </button>
           }
+          @if (!filteredManualCardChoices.length) { <div class="printing-search-empty">Aucune impression ne correspond à ce numéro.</div> }
         </div>
         <div class="dialog-actions"><button class="outline-button" type="button" [disabled]="lookingUpCard()" (click)="cancelManualPrintingChoice()">Annuler</button></div>
       </section>
@@ -241,6 +263,16 @@
         <input #profileImageInput class="file-input-hidden" type="file" accept="image/*" (change)="onProfileImageSelected($event)" />
         <div class="profile-image-picker"><div class="profile-image-preview">@if (profileImageDraft()) { <img [src]="profileImageDraft()" alt="Aperçu de la photo de profil" /> } @else { {{ profileNameDraft().trim().charAt(0).toLocaleUpperCase() || 'M' }} }</div><div><strong>Photo de profil</strong><small>Image recadrée automatiquement</small><div class="profile-image-actions"><button class="outline-button" type="button" (click)="profileImageInput.click()">Choisir une image</button>@if (profileImageDraft()) { <button class="text-button" type="button" (click)="profileImageDraft.set(null)">Retirer</button> }</div></div></div>
         <label class="profile-name-field">Nom affiché<input type="text" maxlength="40" [value]="profileNameDraft()" (input)="profileNameDraft.set($any($event.target).value)" placeholder="Ton nom" /></label>
+        <section class="profile-wallpaper-picker" aria-labelledby="profile-wallpaper-title">
+          <div><strong id="profile-wallpaper-title">Arrière-plan</strong><small>Choisis le fond de l’application.</small></div>
+          <div class="wallpaper-choice-grid">
+            @for (wallpaper of wallpaperOptions; track wallpaper.index) {
+              <button class="wallpaper-choice" type="button" [class.is-selected]="wallpaperDraft() === wallpaper.index" [attr.aria-pressed]="wallpaperDraft() === wallpaper.index" (click)="wallpaperDraft.set(wallpaper.index)">
+                <span class="wallpaper-choice-preview" [attr.data-wallpaper]="wallpaper.index"></span><span>{{ wallpaper.label }}</span>
+              </button>
+            }
+          </div>
+        </section>
         <label class="profile-animation-setting"><input type="checkbox" [checked]="hitCardAnimationsDraft()" (change)="hitCardAnimationsDraft.set($any($event.target).checked)" /><span><strong>Animations des hits</strong><small>Désactive le trait lumineux qui tourne autour des cartes.</small></span></label>
         @if (profileSettingsError()) { <p class="profile-settings-error" role="alert">{{ profileSettingsError() }}</p> }
         <div class="dialog-actions"><button class="outline-button" type="button" (click)="closeProfileSettings()">Annuler</button><button class="primary-button" type="button" (click)="saveProfileSettings()">Enregistrer</button></div>
