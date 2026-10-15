@@ -75,11 +75,11 @@ export class CardRecognitionService {
     const worker = await this.getWorker();
     const codeCandidates: OcrCandidate[] = [];
     const codeRegions = [
-      // The printed ID is immediately beside rarity and cost marks. Keep this first
-      // crop narrow enough that those marks cannot be mistaken for trailing digits.
-      { x: 0.71, y: 0.94, width: 0.18, height: 0.045, mode: Tesseract.PSM.SINGLE_LINE },
-      // Wider fallback tolerates different layouts and low-contrast footer text.
-      { x: 0.48, y: 0.89, width: 0.50, height: 0.105, mode: Tesseract.PSM.SPARSE_TEXT },
+      // The code can sit on either side of the bottom information strip depending
+      // on printing and layout. Read both halves before trying the whole footer.
+      { x: 0.04, y: 0.89, width: 0.46, height: 0.105, mode: Tesseract.PSM.SINGLE_LINE },
+      { x: 0.50, y: 0.89, width: 0.46, height: 0.105, mode: Tesseract.PSM.SINGLE_LINE },
+      { x: 0.04, y: 0.86, width: 0.92, height: 0.13, mode: Tesseract.PSM.SPARSE_TEXT },
     ];
 
     for (const region of codeRegions) {
@@ -176,7 +176,9 @@ export class CardRecognitionService {
         }
       }
 
-      if (!bestPoints) return { image: frame, detected: false };
+      // The scanner already crops to the on-screen card guide. A card filling
+      // that crop has no visible outer contour, so keep the guided frame and OCR it.
+      if (!bestPoints) return { image: frame, detected: true };
 
       const outWidth = 560;
       const outHeight = 800;
@@ -283,8 +285,8 @@ export class CardRecognitionService {
         .replace(/[\u2014\u2013\u2212_]/g, '-')
         .replace(/\b[0OQ6]P(?=\s*\d)/g, 'OP')
         .replace(/\s+/g, ' ');
-      const setMatch = normalized.match(/\b(OP|ST|EB|PRB)\s*-?\s*([0-9OQ]{1,2})\s*-?\s*([0-9OQIL]{2,5})/);
-      const promoMatch = normalized.match(/\b(P|DON)\s*-?\s*([0-9OQIL]{2,5})/);
+      const setMatch = normalized.match(/\b(OP|ST|EB|PRB)\s*-?\s*([0-9OQ]{1,2})\s*-?\s*([0-9OQIL]{3})\b/);
+      const promoMatch = normalized.match(/\b(P|DON)\s*-?\s*([0-9OQIL]{3})\b/);
       if (setMatch) {
         return [{
           set: `${setMatch[1]}${setMatch[2].replace(/[OQ]/g, '0').padStart(2, '0')}`,
@@ -310,7 +312,7 @@ export class CardRecognitionService {
     const catalog = await this.getCatalog();
     const ranked: Array<{ card: CatalogCard; distance: number; artMismatch: number; exactCodeMatch: number; nameSimilarity: number; confidence: number }> = [];
     for (const reading of readings) {
-      const typedNumber = reading.number.slice(0, 3);
+      const typedNumber = reading.number;
       for (const card of catalog) {
         const upperCode = card.code.toUpperCase();
         let cardSet: string;
@@ -329,7 +331,9 @@ export class CardRecognitionService {
         if (cardSet !== reading.set) continue;
 
         const distance = this.editDistance(typedNumber, cardNumber);
-        if (distance > 1) continue;
+        // A one-digit fuzzy correction can turn one real card into another. Only
+        // resolve catalog candidates when all three printed digits agree.
+        if (distance !== 0) continue;
         ranked.push({
           card,
           distance,
