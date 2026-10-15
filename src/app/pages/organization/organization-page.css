@@ -50,6 +50,9 @@
 .organization-extension-name { max-width: calc(100% - 12px); overflow: hidden; color: #9bb2b8; font-size: 8px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .organization-group-tile > small { color: #8fa0a7; font-size: 8px; }
 .organization-group-arrow { position: absolute; top: 13px; right: 12px; color: #7899a2; }
+.organization-hits-tile { background: linear-gradient(145deg,rgba(72,56,29,.54),rgba(17,24,28,.94)); border-color: rgba(232,198,110,.2); }
+.organization-hits-tile:hover { background: linear-gradient(145deg,rgba(89,67,31,.68),rgba(18,28,33,.96)); border-color: rgba(232,198,110,.48); }
+.organization-hits-mark { display: grid; width: 22px; height: 22px; place-items: center; color: #efd07a; background: rgba(232,198,110,.12); border-radius: 5px; }
 .color-group-tile { min-height: 91px; }
 .color-group-tile > .organization-color-dot { width: 14px; height: 14px; }
 .organization-card-list { display: grid; gap: 5px; margin-top: 14px; }

@@ -18,7 +18,6 @@ import {
   LucideLayers,
   LucideLibrary,
   LucidePencil,
-  LucidePlus,
   LucideRotateCcw,
   LucideRotateCw,
   LucideScanLine,
@@ -81,6 +80,8 @@ export class App implements OnDestroy {
   readonly editingCardId = signal<string | null>(null);
   readonly scanSessionCards = signal<CollectionCard[]>([]);
   readonly manualCardChoices = signal<IdentifiedCard[]>([]);
+  readonly searchResults = signal<CollectionCard[]>([]);
+  readonly searchDropdownOpen = signal(false);
   readonly manualChoiceSource = signal<'manual' | 'scanner-name'>('manual');
   readonly scannerNameReference = signal<string | null>(null);
   readonly scannerRecognizedName = signal('');
@@ -323,6 +324,31 @@ export class App implements OnDestroy {
 
   onSearch(value: string): void {
     this.searchTerm = value;
+    this.searchDropdownOpen.set(value.trim().length >= 2);
+    const query = value.trim().toLocaleLowerCase();
+    this.searchResults.set(query.length < 2 ? [] : this.collectionCards().filter((card) =>
+      `${card.name} ${card.code}`.toLocaleLowerCase().includes(query),
+    ).slice(0, 12));
+  }
+
+  openSearchDropdown(): void {
+    if (this.searchTerm.trim().length >= 2) this.searchDropdownOpen.set(true);
+  }
+
+  onSearchFocusOut(event: FocusEvent): void {
+    const container = event.currentTarget as HTMLElement;
+    if (!(event.relatedTarget instanceof Node) || !container.contains(event.relatedTarget)) this.closeSearchDropdown();
+  }
+
+  closeSearchDropdown(): void {
+    this.searchDropdownOpen.set(false);
+  }
+
+  openSearchResult(card: CollectionCard): void {
+    this.searchDropdownOpen.set(false);
+    this.searchTerm = '';
+    this.searchResults.set([]);
+    this.openCardDetails(card);
   }
 
   onCollectionSearch(value: string): void {
@@ -483,6 +509,8 @@ export class App implements OnDestroy {
     if (this.activeItem !== 'Scanner' && item === 'Scanner') this.scanSessionCards.set([]);
     this.activeItem = item;
     this.searchTerm = '';
+    this.searchResults.set([]);
+    this.searchDropdownOpen.set(false);
   }
 
   private readWallpaperIndex(): number {

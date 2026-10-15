@@ -39,11 +39,26 @@
 
   <main class="main-area">
     <header class="topbar">
-      <label class="search-box">
-        <svg lucideSearch [size]="16" aria-hidden="true"></svg>
-        <input type="search" placeholder="Rechercher dans ta collection..." [value]="searchTerm" (input)="onSearch($any($event.target).value)" />
-        <kbd>⌘ K</kbd>
-      </label>
+      <div class="global-search" (focusout)="onSearchFocusOut($event)" (keydown.escape)="closeSearchDropdown()">
+        <label class="search-box">
+          <svg lucideSearch [size]="16" aria-hidden="true"></svg>
+          <input type="search" placeholder="Rechercher une carte par nom ou numéro..." [value]="searchTerm" (focus)="openSearchDropdown()" (input)="onSearch($any($event.target).value)" />
+          <kbd>⌘ K</kbd>
+        </label>
+        @if (searchDropdownOpen()) {
+          <div class="global-search-results" role="listbox" aria-label="Résultats dans ta collection">
+            @if (searchResults().length) {
+              @for (result of searchResults(); track result.id) {
+                <button class="global-search-result" type="button" role="option" (mousedown)="$event.preventDefault()" (click)="openSearchResult(result)">
+                  @if (result.imageUrl || result.imageDataUrl) { <img [src]="result.imageUrl || result.imageDataUrl" alt="" /> } @else { <span class="global-search-result-placeholder"><svg lucideLayers [size]="16"></svg></span> }
+                  <span class="global-search-result-copy"><strong>{{ result.name }}</strong><small>{{ result.code }} · {{ result.variant === 'Alternate art' ? 'Alternative' : 'Standard' }}</small></span>
+                  <span class="global-search-result-price">{{ formatPrice(result.marketPrice) }}</span>
+                </button>
+              }
+            } @else { <div class="global-search-message">Aucune carte correspondante dans ta collection.</div> }
+          </div>
+        }
+      </div>
       <div class="topbar-actions">
         <span class="sync-state"><i></i> Sauvegardé ici</span>
         <button class="icon-button" type="button" aria-label="Notifications" (click)="showNotice('Tes données restent sur cet appareil.')"><svg lucideBell [size]="17"></svg></button>

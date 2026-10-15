@@ -3,7 +3,7 @@ import type { App } from '../../app';
 import { CollectionCard } from '../../interfaces/collection-card';
 import { CardRecognitionService } from '../../services/card-recognition.service';
 import { CollectionCardTile } from '../../components/collection-card-tile/collection-card-tile';
-import { LucideArrowRight, LucideInfo, LucideLayers, LucideX } from '@lucide/angular';
+import { LucideArrowRight, LucideInfo, LucideLayers, LucideStar, LucideX } from '@lucide/angular';
 
 type ColorGroup = { key: string; label: string; colors: string[]; cards: CollectionCard[]; cardCount: number };
 type ExtensionGroup = { code: string; colorGroups: ColorGroup[]; cardCount: number };
@@ -21,7 +21,7 @@ const COLOR_ORDER = ['red', 'green', 'blue', 'purple', 'black', 'yellow'];
 @Component({
   selector: 'app-organization-page',
   standalone: true,
-  imports: [CollectionCardTile, LucideArrowRight, LucideInfo, LucideLayers, LucideX],
+  imports: [CollectionCardTile, LucideArrowRight, LucideInfo, LucideLayers, LucideStar, LucideX],
   templateUrl: './organization-page.html',
   styleUrl: './organization-page.css',
   encapsulation: ViewEncapsulation.None,
@@ -36,6 +36,7 @@ export class OrganizationPage implements OnInit {
   readonly colorLookupFailed = signal(false);
   readonly selectedExtension = signal<string | null>(null);
   readonly selectedColorKey = signal<string | null>(null);
+  readonly selectedHits = signal(false);
   readonly sortModalOpen = signal(false);
   readonly selectedUnsortedIds = signal<string[]>([]);
   readonly savingSortedCards = signal(false);
@@ -54,7 +55,7 @@ export class OrganizationPage implements OnInit {
 
   get extensionGroups(): ExtensionGroup[] {
     const extensions = new Map<string, Map<string, { colors: string[]; cards: CollectionCard[] }>>();
-    for (const card of this.context.collectionCards()) {
+    for (const card of this.context.collectionCards().filter((item) => !this.context.isHit(item))) {
       const extension = this.extensionFor(card.code);
       const colors = this.cardColors(card);
       const colorKey = colors.length ? colors.map((color) => color.toLocaleLowerCase()).sort((a, b) => COLOR_ORDER.indexOf(a) - COLOR_ORDER.indexOf(b)).join('+') : 'unknown';
@@ -88,6 +89,16 @@ export class OrganizationPage implements OnInit {
       .sort((a, b) => b.addedAt.localeCompare(a.addedAt));
   }
 
+  get hitCards(): CollectionCard[] {
+    return this.context.collectionCards()
+      .filter((card) => this.context.isHit(card))
+      .sort((a, b) => this.extensionFor(a.code).localeCompare(this.extensionFor(b.code), 'fr', { numeric: true }) || this.cardNumber(a.code).localeCompare(this.cardNumber(b.code), 'fr', { numeric: true }));
+  }
+
+  get hitQuantity(): number {
+    return this.hitCards.reduce((count, card) => count + card.quantity, 0);
+  }
+
   get unsortedQuantity(): number {
     return this.unsortedCards.reduce((count, card) => count + card.quantity, 0);
   }
@@ -101,8 +112,15 @@ export class OrganizationPage implements OnInit {
   }
 
   selectExtension(code: string): void {
+    this.selectedHits.set(false);
     this.selectedExtension.set(code);
     this.selectedColorKey.set(null);
+  }
+
+  selectHits(): void {
+    this.selectedExtension.set(null);
+    this.selectedColorKey.set(null);
+    this.selectedHits.set(true);
   }
 
   selectColor(key: string): void {
@@ -110,7 +128,8 @@ export class OrganizationPage implements OnInit {
   }
 
   goBack(): void {
-    if (this.selectedColorKey()) this.selectedColorKey.set(null);
+    if (this.selectedHits()) this.selectedHits.set(false);
+    else if (this.selectedColorKey()) this.selectedColorKey.set(null);
     else this.selectedExtension.set(null);
   }
 

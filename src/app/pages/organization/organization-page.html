@@ -9,23 +9,32 @@
 <section class="organization-workspace">
   <div class="organization-main">
     <div class="organization-section-heading">
-      <div><div class="section-kicker">TES PILES</div><h2>@if (selectedColorGroup) { {{ selectedColorGroup.label }} } @else if (selectedExtensionGroup) { {{ selectedExtensionGroup.code }} } @else { Extensions }</h2><span class="organization-selection-count">{{ context.totalQuantity }} cartes à organiser</span></div>
+      <div><div class="section-kicker">TES PILES</div><h2>@if (selectedColorGroup) { {{ selectedColorGroup.label }} } @else if (selectedHits()) { Hits } @else if (selectedExtensionGroup) { {{ selectedExtensionGroup.code }} } @else { Extensions }</h2><span class="organization-selection-count">{{ selectedHits() ? hitQuantity : selectedColorGroup?.cardCount ?? selectedExtensionGroup?.cardCount ?? context.totalQuantity }} cartes à organiser</span></div>
       <div class="organization-header-actions">
         <button class="organization-sort-button" type="button" (click)="openSortModal()">Trier les cartes récemment ajoutées <span>{{ unsortedQuantity }}</span></button>
-        @if (selectedExtension()) { <button class="organization-back-button" type="button" (click)="goBack()"><svg lucideArrowRight [size]="13"></svg>{{ selectedColorKey() ? 'Couleurs de ' + selectedExtension() : 'Toutes les extensions' }}</button> }
+        @if (selectedExtension() || selectedHits()) { <button class="organization-back-button" type="button" (click)="goBack()"><svg lucideArrowRight [size]="13"></svg>{{ selectedHits() ? 'Toutes les extensions' : selectedColorKey() ? 'Couleurs de ' + selectedExtension() : 'Toutes les extensions' }}</button> }
       </div>
     </div>
 
     @if (loadingColors()) { <div class="organization-loading"><i></i> Récupération des couleurs des cartes…</div> }
     @if (colorLookupFailed()) { <div class="organization-callout"><svg lucideInfo [size]="15"></svg><span>Le catalogue des couleurs est indisponible. Les couleurs enregistrées restent affichées ; les autres cartes sont regroupées dans « Couleur à identifier ».</span></div> }
 
-    @if (!selectedExtension()) {
+    @if (!selectedExtension() && !selectedHits()) {
       <div class="organization-group-grid">
+        <button class="organization-group-tile organization-hits-tile" type="button" (click)="selectHits()">
+          <span class="organization-hits-mark"><svg lucideStar [size]="16"></svg></span><strong>Hits</strong><span class="organization-extension-name">Cartes marquées comme hits</span><small>{{ hitQuantity }} {{ hitQuantity === 1 ? 'carte' : 'cartes' }}</small><svg class="organization-group-arrow" lucideArrowRight [size]="14"></svg>
+        </button>
         @for (extension of extensionGroups; track extension.code) {
           <button class="organization-group-tile" type="button" (click)="selectExtension(extension.code)">
             <span class="physical-set-mark"><svg lucideLayers [size]="16"></svg></span><strong>{{ extension.code }}</strong>@if (context.getExtensionName(extension.code); as extensionName) { <span class="organization-extension-name">{{ extensionName }}</span> }<small>{{ extension.cardCount }} {{ extension.cardCount === 1 ? 'carte' : 'cartes' }}</small><svg class="organization-group-arrow" lucideArrowRight [size]="14"></svg>
           </button>
         } @empty { <div class="organization-empty">Ajoute ou importe des cartes pour créer tes groupes par extension.</div> }
+      </div>
+    } @else if (selectedHits()) {
+      <div class="collection-card-grid organization-card-grid">
+        @for (card of hitCards; track card.id) {
+          <app-collection-card-tile [card]="card" [context]="context" [showUnsortedState]="true" />
+        } @empty { <div class="organization-empty">Aucune carte marquée comme hit.</div> }
       </div>
     } @else if (!selectedColorKey()) {
       @if (selectedExtensionGroup; as extension) {
