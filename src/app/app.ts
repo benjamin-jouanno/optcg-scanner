@@ -22,6 +22,8 @@ import {
   LucideRotateCw,
   LucideScanLine,
   LucideSearch,
+  LucideMoon,
+  LucideSun,
   LucideShieldCheck,
   LucideSparkles,
   LucideStar,
@@ -46,10 +48,11 @@ type NavItem = { label: Page; icon: string };
 
 @Component({
   selector: 'app-root',
-  imports: [DatePipe, HomePage, CollectionPage, OrganizationPage, ScannerPage, StatisticsPage, LucideHouse, LucideLibrary, LucideScanLine, LucideChartNoAxesCombined, LucideSparkles, LucideArrowUpRight, LucideEllipsis, LucideSearch, LucideBell, LucideCircleAlert, LucideX, LucideLayers, LucideStar, LucidePencil, LucideTrash2],
+  imports: [DatePipe, HomePage, CollectionPage, OrganizationPage, ScannerPage, StatisticsPage, LucideHouse, LucideLibrary, LucideScanLine, LucideChartNoAxesCombined, LucideSparkles, LucideArrowUpRight, LucideEllipsis, LucideSearch, LucideBell, LucideCircleAlert, LucideX, LucideLayers, LucideStar, LucidePencil, LucideTrash2, LucideMoon, LucideSun],
   templateUrl: './app.html',
 })
 export class App implements OnDestroy {
+  readonly splashVisible = signal(true);
   readonly testPhotoUrl = signal('');
   readonly testPhotoName = signal('');
   readonly testPhotoPickerOpen = signal(false);
@@ -67,6 +70,7 @@ export class App implements OnDestroy {
   readonly visualModelStatus = this.visualRecognition.status;
   readonly collectionCards = signal<CollectionCard[]>([]);
   readonly wallpaperIndex = signal(this.readWallpaperIndex());
+  readonly theme = signal<'dark' | 'light'>(this.readTheme());
   readonly collectionLoading = signal(true);
   readonly storageError = signal('');
   readonly cameraError = signal('');
@@ -114,6 +118,7 @@ export class App implements OnDestroy {
   readonly profileNameDraft = signal('');
   readonly profileImageDraft = signal<string | null>(null);
   readonly wallpaperDraft = signal(0);
+  readonly themeDraft = signal<'dark' | 'light'>('dark');
   readonly wallpaperImagesLoaded = signal<Record<number, boolean>>({});
   readonly hitCardAnimationsDraft = signal(true);
   readonly profileSettingsError = signal('');
@@ -378,6 +383,7 @@ export class App implements OnDestroy {
     this.profileImageDraft.set(this.profileImage());
     this.hitCardAnimationsDraft.set(this.hitCardAnimationsEnabled());
     this.wallpaperDraft.set(this.wallpaperIndex());
+    this.themeDraft.set(this.theme());
     this.profileSettingsError.set('');
     this.profileSettingsOpen.set(true);
   }
@@ -437,10 +443,12 @@ export class App implements OnDestroy {
       else localStorage.removeItem('grand-line-profile-image');
       localStorage.setItem('grand-line-hit-animations', String(this.hitCardAnimationsDraft()));
       localStorage.setItem('grand-line-wallpaper', String(this.wallpaperDraft()));
+      localStorage.setItem('grand-line-theme', this.themeDraft());
       this.profileName.set(name);
       this.profileImage.set(this.profileImageDraft());
       this.hitCardAnimationsEnabled.set(this.hitCardAnimationsDraft());
       this.wallpaperIndex.set(this.wallpaperDraft());
+      this.theme.set(this.themeDraft());
       this.profileSettingsOpen.set(false);
     } catch {
       this.profileSettingsError.set('Impossible d’enregistrer ces préférences dans le stockage local.');
@@ -556,9 +564,19 @@ export class App implements OnDestroy {
     this.searchDropdownOpen.set(false);
   }
 
+  finishSplash(event: AnimationEvent): void {
+    if (event.target !== event.currentTarget) return;
+    this.activeItem = 'Accueil';
+    this.splashVisible.set(false);
+  }
+
   private readWallpaperIndex(): number {
     const stored = Number(this.readProfileSetting('grand-line-wallpaper'));
     return Number.isInteger(stored) && stored >= 0 && stored < 16 ? stored : 0;
+  }
+
+  private readTheme(): 'dark' | 'light' {
+    return this.readProfileSetting('grand-line-theme') === 'light' ? 'light' : 'dark';
   }
 
   private readProfileSetting(key: string): string | null {

@@ -1,4 +1,11 @@
-﻿<div class="app-shell" [attr.data-wallpaper]="profileSettingsOpen() ? wallpaperDraft() : wallpaperIndex()" [class.hit-animations-disabled]="!hitCardAnimationsEnabled()">
+﻿<div class="app-shell" [attr.data-wallpaper]="profileSettingsOpen() ? wallpaperDraft() : wallpaperIndex()" [attr.data-theme]="profileSettingsOpen() ? themeDraft() : theme()" [class.hit-animations-disabled]="!hitCardAnimationsEnabled()">
+  @if (splashVisible()) {
+    <div class="app-splash-screen" role="status" aria-label="Chargement de Grand Line Card Log" (animationend)="finishSplash($event)">
+      <img class="splash-logo" src="/assets/logo/logo.png" alt="Grand Line Card Log" />
+      <span class="splash-title" aria-hidden="true">GRAND LINE CARD LOG</span>
+      <span class="splash-loading-line" aria-hidden="true"></span>
+    </div>
+  }
   <aside class="sidebar">
     <button class="brand" type="button" (click)="selectItem('Accueil')" aria-label="Accueil">
       <img class="brand-logo" src="/assets/logo/logo.png" alt="One Piece Card Game" />
@@ -170,6 +177,13 @@
         <input #profileImageInput class="file-input-hidden" type="file" accept="image/*" (change)="onProfileImageSelected($event)" />
         <div class="profile-image-picker"><div class="profile-image-preview">@if (profileImageDraft()) { <img [src]="profileImageDraft()" alt="Aperçu de la photo de profil" /> } @else { {{ profileNameDraft().trim().charAt(0).toLocaleUpperCase() || 'M' }} }</div><div><strong>Photo de profil</strong><small>Image recadrée automatiquement</small><div class="profile-image-actions"><button class="outline-button" type="button" (click)="profileImageInput.click()">Choisir une image</button>@if (profileImageDraft()) { <button class="text-button" type="button" (click)="profileImageDraft.set(null)">Retirer</button> }</div></div></div>
         <label class="profile-name-field">Nom affiché<input type="text" maxlength="40" [value]="profileNameDraft()" (input)="profileNameDraft.set($any($event.target).value)" placeholder="Ton nom" /></label>
+        <section class="profile-theme-picker" aria-labelledby="profile-theme-title">
+          <div><strong id="profile-theme-title">Thème</strong><small>Choisis l’apparence de l’application.</small></div>
+          <div class="profile-theme-options">
+            <button class="profile-theme-option" type="button" [class.is-selected]="themeDraft() === 'dark'" [attr.aria-pressed]="themeDraft() === 'dark'" (click)="themeDraft.set('dark')"><svg lucideMoon [size]="15"></svg><span>Sombre</span></button>
+            <button class="profile-theme-option" type="button" [class.is-selected]="themeDraft() === 'light'" [attr.aria-pressed]="themeDraft() === 'light'" (click)="themeDraft.set('light')"><svg lucideSun [size]="15"></svg><span>Clair</span></button>
+          </div>
+        </section>
         <section class="profile-wallpaper-picker" aria-labelledby="profile-wallpaper-title">
           <div><strong id="profile-wallpaper-title">Arrière-plan</strong><small>Choisis le fond de l’application.</small></div>
           <div class="wallpaper-choice-grid">
