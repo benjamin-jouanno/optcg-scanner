@@ -44,6 +44,10 @@ To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use th
 ng test
 ```
 
+## Training the card recognition model
+
+The scanner can load a locally trained ONNX card classifier. See [training/README.md](training/README.md) for preparing labeled card photos, fine-tuning MobileNetV3 Small, and exporting the model. Until model artifacts are generated, the scanner continues using its existing OCR flow.
+
 ## Running end-to-end tests
 
 For end-to-end (e2e) testing, run:

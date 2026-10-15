@@ -119,8 +119,11 @@
     <div class="modal-scrim scanner-test-picker-scrim" (click)="closeTestPhotoPicker()">
       <section class="import-dialog scanner-test-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="test-photo-picker-title" (click)="$event.stopPropagation()">
         <button class="dialog-close" type="button" aria-label="Fermer" (click)="closeTestPhotoPicker()"><svg lucideX [size]="16"></svg></button>
-        <div class="section-kicker">OUTIL DE TEST OCR</div><h2 id="test-photo-picker-title">Choisis une photo</h2>
-        <p>Sélectionne l’une des photos de test pour lancer la reconnaissance.</p>
+        <div class="section-kicker">OUTIL DE TEST DU SCANNER</div><h2 id="test-photo-picker-title">Choisis une photo</h2>
+        <p>Importe une photo de ta collection ou sélectionne un exemple pour tester la détection et le modèle.</p>
+        <label class="scanner-test-photo-upload"><strong>Importer une photo</strong><small>JPG, PNG ou WEBP · 25 Mo maximum</small><input type="file" accept="image/*" (change)="onTestPhotoUpload($event)" /></label>
+        @if (testPhotoUploadError()) { <div class="camera-error scanner-test-photo-error" role="alert">{{ testPhotoUploadError() }}</div> }
+        <div class="section-kicker scanner-test-samples-heading">OU UTILISER UN EXEMPLE</div>
         <div class="scanner-test-photo-options">
           @for (photo of testPhotos; track photo.url) {
             <button class="scanner-test-photo-option" type="button" [disabled]="lookingUpCard()" (click)="selectTestPhoto(photo)">

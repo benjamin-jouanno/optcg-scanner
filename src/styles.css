@@ -21,6 +21,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid #76cbe4; outline-
 .scanner-test-photo-option > span { display: grid; min-width: 0; gap: 4px; }
 .scanner-test-photo-option strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .scanner-test-photo-option small { overflow: hidden; color: #91a4ac; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.scanner-test-photo-upload { display: grid; gap: 6px; margin-top: 14px; padding: 13px; color: #e9eeee; background: rgba(4,13,18,.56); border: 1px dashed rgba(121,186,209,.4); border-radius: 8px; }
+.scanner-test-photo-upload strong { font-size: 10px; }
+.scanner-test-photo-upload small { color: #91a4ac; font-size: 8px; }
+.scanner-test-photo-upload input { width: 100%; color: #b8c6cb; font: inherit; font-size: 9px; }
+.scanner-test-photo-upload input::file-selector-button { margin-right: 9px; padding: 7px 10px; color: #c8e9ef; background: rgba(33,76,88,.55); border: 1px solid rgba(121,186,209,.34); border-radius: 5px; cursor: pointer; }
+.scanner-test-photo-upload input::file-selector-button:hover { background: rgba(44,99,113,.72); }
+.scanner-test-photo-error { margin-top: 8px; }
+.scanner-test-samples-heading { margin-top: 18px; }
 .modal-scrim.scanner-test-picker-scrim .scanner-test-picker-dialog { width: min(780px,100%); }
 .profile-wallpaper-picker { display: grid; gap: 10px; margin-top: 15px; }
 .profile-wallpaper-picker > div:first-child { display: grid; gap: 4px; }
@@ -70,7 +78,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #76cbe4; outline-
 .variant-picker button span:first-child, .variant-picker button span:last-child { color: #84949c; }
 .variant-picker button:not(.is-alternate) span:first-child, .variant-picker button.is-alternate span:last-child { color: #e4d08d; }
 .variant-picker button.is-alternate i::after { background: #e5c969; transform: translateX(13px); }
-.camera-video { transform: rotate(var(--camera-rotation, 0deg)) scale(var(--camera-zoom, 1)); }
+.camera-video { transform: rotate(var(--camera-rotation, 0deg)) scale(var(--camera-zoom, 1)); transform-origin: center; }
 .camera-stage.camera-wide-view .camera-video { object-fit: contain; }
 .camera-stage.camera-quarter-turn .camera-video { inset: auto; top: 50%; left: 50%; right: auto; bottom: auto; width: 100cqh; height: 100cqw; max-width: none; max-height: none; transform: translate(-50%,-50%) rotate(var(--camera-rotation, 0deg)) scale(var(--camera-zoom, 1)); }
 .camera-rotate-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }

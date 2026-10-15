@@ -31,13 +31,14 @@ import {
 } from '@lucide/angular';
 import { CollectionStorageService } from './services/collection-storage.service';
 import { CardCondition, CardFinish, CollectionBackup, CollectionCard } from './interfaces/collection-card';
-import { CardRecognitionService } from './services/card-recognition.service';
-import { CardCodeReading, IdentifiedCard } from './interfaces/identified-card';
+import { CardFrameBounds, CardRecognitionService } from './services/card-recognition.service';
+import { IdentifiedCard } from './interfaces/identified-card';
 import { HomePage } from './pages/home/home-page';
 import { CollectionPage } from './pages/collection/collection-page';
 import { ScannerPage } from './pages/scanner/scanner-page';
 import { StatisticsPage } from './pages/statistics/statistics-page';
 import { OrganizationPage } from './pages/organization/organization-page';
+import { CardVisualRecognitionService } from './services/card-visual-recognition.service';
 
 type Page = 'Accueil' | 'Ma collection' | 'Organisation' | 'Scanner' | 'Statistiques';
 type ScanIndicatorState = 'idle' | 'missing' | 'detected' | 'added';
@@ -52,6 +53,7 @@ export class App implements OnDestroy {
   readonly testPhotoUrl = signal('');
   readonly testPhotoName = signal('');
   readonly testPhotoPickerOpen = signal(false);
+  readonly testPhotoUploadError = signal('');
   readonly testPhotos = [
     { name: 'card-sample.png', label: 'Photo de carte', url: '/testFiles/card-sample.png' },
     { name: 'capture-024813.png', label: 'Capture 024813', url: '/testFiles/capture-024813.png' },
@@ -61,6 +63,8 @@ export class App implements OnDestroy {
 
   private readonly storage = inject(CollectionStorageService);
   private readonly recognition = inject(CardRecognitionService);
+  private readonly visualRecognition = inject(CardVisualRecognitionService);
+  readonly visualModelStatus = this.visualRecognition.status;
   readonly collectionCards = signal<CollectionCard[]>([]);
   readonly wallpaperIndex = signal(this.readWallpaperIndex());
   readonly collectionLoading = signal(true);
@@ -69,6 +73,8 @@ export class App implements OnDestroy {
   readonly cameraActive = signal(false);
   readonly testPhotoActive = signal(false);
   readonly ocrWorking = signal(false);
+  readonly visualModelWorking = signal(false);
+  readonly detectedCardBounds = signal<CardFrameBounds | null>(null);
   readonly recognitionStatus = signal('Active la caméra pour commencer la reconnaissance automatique.');
   readonly recognitionDebugText = signal('');
   readonly lastIdentifiedCard = signal('');
@@ -79,6 +85,7 @@ export class App implements OnDestroy {
   readonly pendingDeletion = signal<CollectionCard | null>(null);
   readonly editingCardId = signal<string | null>(null);
   readonly scanSessionCards = signal<CollectionCard[]>([]);
+  readonly scanAddedCard = signal<CollectionCard | null>(null);
   readonly manualCardChoices = signal<IdentifiedCard[]>([]);
   readonly searchResults = signal<CollectionCard[]>([]);
   readonly searchDropdownOpen = signal(false);
@@ -93,7 +100,11 @@ export class App implements OnDestroy {
   editAlternateArt = false;
   readonly scanIndicatorState = signal<ScanIndicatorState>('idle');
   readonly cameraRotation = signal(0);
-  readonly cameraZoom = signal(0.7);
+  readonly cameraZoom = signal(1);
+  readonly cameraPanX = signal(0);
+  readonly cameraPanY = signal(0);
+  readonly cameraPanning = signal(false);
+  private cameraPanPointer: { id: number; x: number; y: number } | null = null;
   readonly pendingImport = signal<CollectionBackup | null>(null);
   readonly importError = signal('');
   readonly profileName = signal(this.readProfileSetting('grand-line-profile-name') || 'Monkey D.');
@@ -137,11 +148,15 @@ export class App implements OnDestroy {
   editQuantity = 1;
   private cameraStream?: MediaStream;
   private testPhotoImage?: HTMLImageElement;
+  private uploadedTestPhotoUrl?: string;
   private recognitionTimer?: ReturnType<typeof setTimeout>;
+  private scanAddedCardTimer?: ReturnType<typeof setTimeout>;
   private priceRefreshTimer?: ReturnType<typeof setInterval>;
   private recognitionBusy = false;
   private lastRecognizedCode = '';
+  private pendingAmbiguousScanCode = '';
   private candidateCode = '';
+  private candidatePrintingCode = '';
   private candidateAlternateArt = false;
   private candidateHits = 0;
   private missingFrames = 0;
@@ -149,6 +164,7 @@ export class App implements OnDestroy {
   private noticeTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
+    try { localStorage.removeItem('grand-line-cardsight-api-key'); } catch { /* Ignore unavailable browser storage. */ }
     void this.loadCollection();
     this.priceRefreshTimer = setInterval(() => {
       if (!document.hidden && this.collectionCards().some((card) => this.needsMarketPriceRefresh(card))) {
@@ -159,7 +175,9 @@ export class App implements OnDestroy {
 
   ngOnDestroy(): void {
     this.stopCamera();
+    if (this.uploadedTestPhotoUrl) URL.revokeObjectURL(this.uploadedTestPhotoUrl);
     if (this.priceRefreshTimer) clearInterval(this.priceRefreshTimer);
+    if (this.scanAddedCardTimer) clearTimeout(this.scanAddedCardTimer);
     void this.recognition.dispose();
   }
 
@@ -449,6 +467,31 @@ export class App implements OnDestroy {
     this.cameraZoom.set(Number(value));
   }
 
+  startCameraPan(event: PointerEvent): void {
+    if (!this.cameraActive() && !this.testPhotoActive()) return;
+    if ((event.target as Element | null)?.closest('button, input')) return;
+    const stage = event.currentTarget as HTMLElement;
+    this.cameraPanPointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    stage.setPointerCapture(event.pointerId);
+    this.cameraPanning.set(true);
+    event.preventDefault();
+  }
+
+  moveCameraPan(event: PointerEvent): void {
+    if (this.cameraPanPointer?.id !== event.pointerId) return;
+    this.cameraPanX.update((value) => value + event.clientX - this.cameraPanPointer!.x);
+    this.cameraPanY.update((value) => value + event.clientY - this.cameraPanPointer!.y);
+    this.cameraPanPointer = { ...this.cameraPanPointer, x: event.clientX, y: event.clientY };
+  }
+
+  endCameraPan(event: PointerEvent): void {
+    if (this.cameraPanPointer?.id !== event.pointerId) return;
+    this.cameraPanPointer = null;
+    this.cameraPanning.set(false);
+    const stage = event.currentTarget as HTMLElement;
+    if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+  }
+
   openCardDetails(card: CollectionCard): void {
     this.editingCardId.set(null);
     this.selectedCard.set(card);
@@ -531,6 +574,10 @@ export class App implements OnDestroy {
     return card.marketPrice !== null && card.marketPrice > 2.5;
   }
 
+  cardFramePolygonPoints(bounds: CardFrameBounds): string {
+    return bounds.corners.map((corner) => `${corner.x * 1000},${corner.y * 1000}`).join(' ');
+  }
+
   isRedHit(card: Pick<CollectionCard, 'marketPrice'>): boolean {
     return this.isHit(card) && card.marketPrice! > 100;
   }
@@ -563,14 +610,18 @@ export class App implements OnDestroy {
         return;
       }
       const video = this.scannerPage?.cameraVideo?.nativeElement;
-      if (video) {
-        video.srcObject = this.cameraStream;
-        await video.play();
-        this.cameraActive.set(true);
-        this.scanIndicatorState.set('missing');
-        this.recognitionStatus.set('Place une carte entière dans le cadre. Analyse automatique en cours…');
-        this.scheduleRecognition();
+      if (!video) {
+        this.cameraStream.getTracks().forEach((track) => track.stop());
+        this.cameraStream = undefined;
+        this.cameraError.set('La zone vidéo du scanner n’est pas disponible. Ouvre la page Scanner puis réessaie.');
+        return;
       }
+      video.srcObject = this.cameraStream;
+      await video.play();
+      this.cameraActive.set(true);
+      this.scanIndicatorState.set('missing');
+      this.recognitionStatus.set('Caméra active · recherche de la forme de la carte…');
+      void this.scanLiveFrame();
     } catch (error) {
       this.cameraActive.set(false);
       this.cameraError.set(error instanceof DOMException && error.name === 'NotAllowedError'
@@ -580,20 +631,48 @@ export class App implements OnDestroy {
   }
 
   openTestPhotoPicker(): void {
-    if (this.ocrWorking() || this.lookingUpCard()) return;
+    if (this.ocrWorking() || this.visualModelWorking() || this.lookingUpCard()) return;
+    this.testPhotoUploadError.set('');
     this.testPhotoPickerOpen.set(true);
   }
 
   closeTestPhotoPicker(): void {
     this.testPhotoPickerOpen.set(false);
+    this.testPhotoUploadError.set('');
   }
 
   async selectTestPhoto(photo: { name: string; label: string; url: string }): Promise<void> {
     if (this.recognitionBusy || this.lookingUpCard()) return;
+    this.releaseUploadedTestPhotoUrl();
     this.testPhotoPickerOpen.set(false);
+    this.testPhotoUploadError.set('');
     this.testPhotoUrl.set(photo.url);
     this.testPhotoName.set(photo.name);
     await this.runTestPhoto(photo.url);
+  }
+
+  async onTestPhotoUpload(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      this.testPhotoUploadError.set('Choisis un fichier image (JPG, PNG ou WEBP).');
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      this.testPhotoUploadError.set('La photo doit faire moins de 25 Mo.');
+      return;
+    }
+
+    this.releaseUploadedTestPhotoUrl();
+    const imageUrl = URL.createObjectURL(file);
+    this.uploadedTestPhotoUrl = imageUrl;
+    this.testPhotoPickerOpen.set(false);
+    this.testPhotoUploadError.set('');
+    this.testPhotoUrl.set(imageUrl);
+    this.testPhotoName.set(file.name);
+    await this.runTestPhoto(imageUrl);
   }
 
   private async runTestPhoto(imageUrl: string): Promise<void> {
@@ -623,6 +702,12 @@ export class App implements OnDestroy {
     }
   }
 
+  private releaseUploadedTestPhotoUrl(): void {
+    if (!this.uploadedTestPhotoUrl) return;
+    URL.revokeObjectURL(this.uploadedTestPhotoUrl);
+    this.uploadedTestPhotoUrl = undefined;
+  }
+
   async lookupManualCard(): Promise<void> {
     const code = this.manualCardCode.trim().toUpperCase().replace(/\s+/g, '');
     if (!code || this.lookingUpCard()) return;
@@ -645,6 +730,7 @@ export class App implements OnDestroy {
       this.recognitionStatus.set('Le catalogue est indisponible. Vérifie ta connexion et réessaie.');
     } finally {
       this.lookingUpCard.set(false);
+      this.scheduleRecognition();
     }
   }
 
@@ -654,10 +740,15 @@ export class App implements OnDestroy {
     this.recognitionStatus.set(`Ajout de ${identified.code} à ta collection…`);
     try {
       await this.addManualPrinting(identified, this.manualChoiceFinish());
+      if (this.pendingAmbiguousScanCode && !this.storageError()) {
+        this.lastRecognizedCode = this.pendingAmbiguousScanCode;
+        this.pendingAmbiguousScanCode = '';
+      }
     } catch {
       this.recognitionStatus.set('Impossible d’ajouter cette version. Réessaie.');
     } finally {
       this.lookingUpCard.set(false);
+      this.scheduleRecognition();
     }
   }
 
@@ -666,6 +757,7 @@ export class App implements OnDestroy {
     this.manualChoiceSearch = '';
     this.scannerNameReference.set(null);
     this.scannerRecognizedName.set('');
+    this.pendingAmbiguousScanCode = '';
     this.recognitionStatus.set('Choix de version annulé.');
     this.scheduleRecognition();
   }
@@ -888,14 +980,20 @@ export class App implements OnDestroy {
     this.cameraActive.set(false);
     this.scanIndicatorState.set('idle');
     this.ocrWorking.set(false);
+    this.visualModelWorking.set(false);
+    this.detectedCardBounds.set(null);
+    this.recognition.resetCardTracking();
   }
 
   private scheduleRecognition(): void {
     if ((!this.cameraActive() && !this.testPhotoActive()) || this.recognitionTimer || this.manualCardChoices().length || this.lookingUpCard()) return;
+    // Keep searching promptly while no card outline is visible, then ease off
+    // once a card has been found and the visual model is following it.
+    const retryDelay = this.detectedCardBounds() ? 1000 : 350;
     this.recognitionTimer = setTimeout(() => {
       this.recognitionTimer = undefined;
       void this.scanLiveFrame();
-    }, 1400);
+    }, retryDelay);
   }
 
   scanNow(): void {
@@ -915,77 +1013,88 @@ export class App implements OnDestroy {
       this.scheduleRecognition();
       return;
     }
+
     this.recognitionBusy = true;
     this.ocrWorking.set(true);
+    this.visualModelWorking.set(false);
     try {
       const sourceImage = videoReady && video ? video : testImage!;
-      const zoomAttempts = imageReady
-        ? [...new Set([this.cameraZoom(), Math.min(2.5, this.cameraZoom() * 1.4), Math.min(2.5, this.cameraZoom() * 1.9)])]
-        : [this.cameraZoom()];
-      let reading: CardCodeReading | null = null;
-      let bestFrame: HTMLCanvasElement | null = null;
-      let bestScore = -1;
-      for (const zoom of zoomAttempts) {
-        const frame = this.createOrientedFrame(sourceImage, zoom);
-        const candidate = await this.recognition.readCardCode(frame);
-        const score = candidate.code ? 1000 : candidate.cardDetected ? 100 + Math.min(candidate.name.trim().length, 30) : 0;
-        if (score > bestScore) {
-          bestScore = score;
-          reading = candidate;
-          bestFrame = frame;
-        }
-        if (candidate.code) break;
-      }
-      if (!reading) throw new Error('La lecture OCR n’a retourné aucun résultat.');
-      this.ocrWorking.set(false);
-      this.recognitionDebugText.set(reading.rawText.replace(/\s+/g, ' ').slice(0, 100));
-      const code = reading?.code ?? null;
-      if (!code) {
+      const cameraFrame = this.createCameraFrame(sourceImage, this.cameraZoom(), imageReady);
+      const detection = await this.recognition.detectCardShape(cameraFrame);
+      if (!detection) {
+        this.detectedCardBounds.set(null);
         this.candidateCode = '';
-        this.candidateAlternateArt = false;
         this.candidateHits = 0;
+        this.candidateAlternateArt = false;
         this.missingFrames += 1;
         if (this.missingFrames >= 3) this.lastRecognizedCode = '';
-        this.scanIndicatorState.set(reading.cardDetected ? 'detected' : 'missing');
-        this.recognitionStatus.set(reading.cardDetected
-          ? 'Carte cadrée, mais numéro illisible. Améliore la lumière et garde le bas de la carte net.'
-          : 'Carte non détectée. Place la carte entière dans le cadre.');
-        if (reading.name.trim().length >= 4 && this.nameKey(reading.name) !== this.lastNameSearch && !this.lookingUpCard()) {
-          this.lastNameSearch = this.nameKey(reading.name);
-          let reference: string | null = null;
-          try { if (bestFrame) reference = this.captureScanZone(bestFrame); } catch { /* The OCR result can still be selected without a preview. */ }
-          await this.lookupScannerName(reading.name, reference);
-        }
-      } else if (code === this.lastRecognizedCode) {
-        this.missingFrames = 0;
+        this.scanIndicatorState.set('missing');
+        this.recognitionStatus.set('Recherche de la forme de la carte sur toute l’image…');
+        this.recognitionDebugText.set('Aucun cadre de carte détecté.');
+        return;
+      }
+
+      this.missingFrames = 0;
+      this.detectedCardBounds.set(detection.bounds);
+      this.scanIndicatorState.set('detected');
+      this.recognitionStatus.set('Carte cadrée · identification visuelle en cours…');
+      this.ocrWorking.set(false);
+      this.visualModelWorking.set(true);
+
+      let prediction: Awaited<ReturnType<CardVisualRecognitionService['identify']>> = null;
+      try {
+        prediction = await this.visualRecognition.identify(detection.cardImage);
+      } finally {
+        this.visualModelWorking.set(false);
+      }
+
+      if (!prediction) {
+        this.candidateCode = '';
+        this.candidateHits = 0;
+        this.candidateAlternateArt = false;
+        this.recognitionStatus.set(this.visualModelStatus());
+        this.recognitionDebugText.set('La forme de la carte est détectée ; le modèle n’a pas retourné de candidat.');
+        return;
+      }
+
+      this.recognitionDebugText.set(`Modèle : ${prediction.name} · ${prediction.code} · similarité ${Math.round(prediction.similarity * 100)}% · marge ${Math.round(prediction.margin * 100)}%`);
+      const trustedPrediction = prediction.similarity > 0.5 ? prediction : null;
+      if (!trustedPrediction) {
+        this.candidateCode = '';
+        this.candidateHits = 0;
+        this.candidateAlternateArt = false;
+        this.recognitionStatus.set(`Carte détectée. Suggestion du modèle : ${prediction.code} (${Math.round(prediction.similarity * 100)}%, marge ${Math.round(prediction.margin * 100)}%), confiance insuffisante.`);
+        return;
+      }
+
+      const code = trustedPrediction.code;
+      const baseCode = this.getBaseCardCode(code) ?? code;
+      const lastRecognizedBaseCode = this.getBaseCardCode(this.lastRecognizedCode) ?? this.lastRecognizedCode;
+      if (baseCode === lastRecognizedBaseCode) {
         this.scanIndicatorState.set('added');
         this.recognitionStatus.set(`Carte ${code} déjà ajoutée. Retire-la du cadre avant le prochain scan.`);
-      } else if (code === this.candidateCode) {
-        this.missingFrames = 0;
-        this.candidateAlternateArt ||= Boolean(reading?.alternateArt);
-        this.scanIndicatorState.set('detected');
+      } else if (baseCode === this.candidateCode) {
         this.candidateHits += 1;
-        if (this.candidateHits >= 2) await this.addRecognizedCard(code, this.candidateAlternateArt);
-        else this.recognitionStatus.set(`Numéro lu : ${code}${reading.name ? ` · ${reading.name}` : ''}. Je confirme le nom et le numéro…`);
+        if (this.candidateHits >= (trustedPrediction.similarity >= 0.7 ? 2 : 3)) {
+          await this.resolveAmbiguousModelMatch(code, trustedPrediction.similarity < 0.7);
+        }
+        else this.recognitionStatus.set(`Modèle : ${trustedPrediction.name} (${code}). Confirmation sur une autre image…`);
       } else {
-        this.missingFrames = 0;
-        this.candidateCode = code;
-        this.candidateAlternateArt = Boolean(reading?.alternateArt);
+        this.candidateCode = baseCode;
+        this.candidatePrintingCode = code;
+        this.candidateAlternateArt = false;
         this.candidateHits = 1;
-        this.scanIndicatorState.set('detected');
-        this.recognitionStatus.set(`Numéro lu : ${code}${reading.name ? ` · ${reading.name}` : ''}. Je confirme le nom et le numéro…`);
+        this.recognitionStatus.set(`Modèle : ${trustedPrediction.name} (${code}). Confirmation sur une autre image…`);
       }
     } catch (error) {
-      this.recognitionStatus.set(error instanceof Error && error.message.includes('OCR')
-        ? 'Impossible de charger la reconnaissance. Vérifie ta connexion Internet.'
-        : 'La lecture a échoué. Améliore la lumière et réessaie.');
+      this.recognitionStatus.set(error instanceof Error ? `Détection impossible : ${error.message}` : 'Détection impossible. Vérifie le cadrage et réessaie.');
     } finally {
       this.recognitionBusy = false;
       this.ocrWorking.set(false);
+      this.visualModelWorking.set(false);
       this.scheduleRecognition();
     }
   }
-
   private async lookupScannerName(name: string, reference: string | null = null): Promise<void> {
     if (this.manualCardChoices().length || this.lookingUpCard()) return;
     this.lookingUpCard.set(true);
@@ -1010,6 +1119,42 @@ export class App implements OnDestroy {
     } finally {
       this.lookingUpCard.set(false);
     }
+  }
+
+  private async resolveAmbiguousModelMatch(predictedCode: string, forceSelector = false): Promise<void> {
+    const baseCode = this.getBaseCardCode(predictedCode);
+    if (!baseCode) {
+      this.recognitionStatus.set(`Le modèle reconnaît ${predictedCode}, mais le numéro n’a pas le format attendu.`);
+      return;
+    }
+
+    this.lookingUpCard.set(true);
+    this.pendingAmbiguousScanCode = '';
+    this.candidateCode = '';
+    this.candidateHits = 0;
+    this.manualChoiceSource.set('manual');
+    this.manualChoiceFinish.set(this.scanFinish());
+    this.manualChoiceSearch = '';
+    this.recognitionStatus.set(`Recherche des versions de ${baseCode}…`);
+    try {
+      const printings = await this.recognition.findCardPrintings(baseCode);
+      if (printings.length > 1 || (forceSelector && printings.length === 1)) {
+        this.pendingAmbiguousScanCode = predictedCode;
+        this.manualCardChoices.set(printings);
+        this.recognitionStatus.set(`${printings.length} versions trouvées pour ${baseCode}. Choisis celle de ta carte.`);
+      } else if (printings.length === 1) {
+        await this.addRecognizedCard(printings[0].code, printings[0].variant === 'Alternate art');
+      } else {
+        this.recognitionStatus.set(`Aucune version trouvée pour ${baseCode}. Vérifie le numéro dans l’ajout manuel.`);
+      }
+    } finally {
+      this.lookingUpCard.set(false);
+    }
+  }
+
+  private getBaseCardCode(code: string): string | null {
+    const match = code.trim().toUpperCase().match(/^([A-Z]+\d*)[-_](\d+)(?:[-_].+)?$/);
+    return match ? `${match[1]}-${match[2]}` : null;
   }
 
   private nameKey(value: string): string {
@@ -1068,10 +1213,17 @@ export class App implements OnDestroy {
       : [updated, ...this.collectionCards()]);
     if (!this.storageError()) {
       this.scanSessionCards.update((cards) => [updated, ...cards.filter((card) => card.id !== updated.id)]);
+      this.scanAddedCard.set(updated);
+      if (this.scanAddedCardTimer) clearTimeout(this.scanAddedCardTimer);
+      this.scanAddedCardTimer = setTimeout(() => this.scanAddedCard.set(null), 3200);
     }
   }
 
-  private createOrientedFrame(sourceImage: HTMLVideoElement | HTMLImageElement, zoom = this.cameraZoom()): HTMLCanvasElement {
+  formatScanPrice(price: number | null): string {
+    return price === null ? 'Prix indisponible' : new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(price);
+  }
+
+  private createCameraFrame(sourceImage: HTMLVideoElement | HTMLImageElement, zoom = this.cameraZoom(), focusBottomRight = false): HTMLCanvasElement {
     const sourceWidth = sourceImage instanceof HTMLVideoElement ? sourceImage.videoWidth : sourceImage.naturalWidth;
     const sourceHeight = sourceImage instanceof HTMLVideoElement ? sourceImage.videoHeight : sourceImage.naturalHeight;
     const scale = Math.min(1, 1200 / Math.max(sourceWidth, sourceHeight));
@@ -1087,14 +1239,15 @@ export class App implements OnDestroy {
     sourceContext.rotate(this.cameraRotation() * Math.PI / 180);
     sourceContext.drawImage(sourceImage, -frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight);
 
-    // Render a virtual camera viewport matching the portrait preview before cutting out
-    // the fixed scan guide. This keeps the OCR coordinates aligned with what the user sees.
+    // Render the complete virtual camera viewport to match the visible camera preview.
     const stage = this.scannerPage?.cameraVideo?.nativeElement.parentElement;
     const stageRect = stage?.getBoundingClientRect();
-    const stageWidth = 600;
+    const stageWidth = 1200;
     const stageHeight = stageRect?.width && stageRect.height
       ? Math.round(stageWidth * stageRect.height / stageRect.width)
       : 800;
+    const panX = this.cameraPanX() * stageWidth / (stageRect?.width || stageWidth);
+    const panY = this.cameraPanY() * stageWidth / (stageRect?.width || stageWidth);
     const viewport = document.createElement('canvas');
     viewport.width = stageWidth;
     viewport.height = stageHeight;
@@ -1108,35 +1261,19 @@ export class App implements OnDestroy {
     if (zoom >= 1) {
       const cropWidth = (sourceAspect > stageAspect ? source.height * stageAspect : source.width) / zoom;
       const cropHeight = (sourceAspect > stageAspect ? source.height : source.width / stageAspect) / zoom;
-      viewportContext.drawImage(source, (source.width - cropWidth) / 2, (source.height - cropHeight) / 2, cropWidth, cropHeight, 0, 0, stageWidth, stageHeight);
+      const cropX = (focusBottomRight ? source.width - cropWidth : (source.width - cropWidth) / 2) - panX * cropWidth / stageWidth;
+      const cropY = (focusBottomRight ? source.height - cropHeight : (source.height - cropHeight) / 2) - panY * cropHeight / stageHeight;
+      viewportContext.drawImage(source, cropX, cropY, cropWidth, cropHeight, 0, 0, stageWidth, stageHeight);
     } else {
       const containScale = Math.min(stageWidth / source.width, stageHeight / source.height) * zoom;
       const drawWidth = source.width * containScale;
       const drawHeight = source.height * containScale;
-      viewportContext.drawImage(source, (stageWidth - drawWidth) / 2, (stageHeight - drawHeight) / 2, drawWidth, drawHeight);
+      const drawX = (focusBottomRight ? stageWidth - drawWidth : (stageWidth - drawWidth) / 2) + panX;
+      const drawY = (focusBottomRight ? stageHeight - drawHeight : (stageHeight - drawHeight) / 2) + panY;
+      viewportContext.drawImage(source, drawX, drawY, drawWidth, drawHeight);
     }
 
-    const guideHeight = Math.min(0.88, 560 / stageHeight) * stageHeight;
-    const guideWidth = guideHeight * 0.70;
-    const scanFrame = document.createElement('canvas');
-    scanFrame.width = Math.round(guideWidth);
-    scanFrame.height = Math.round(guideHeight);
-    const scanContext = scanFrame.getContext('2d');
-    if (scanContext) {
-      scanContext.drawImage(viewport, (stageWidth - guideWidth) / 2, (stageHeight - guideHeight) / 2, guideWidth, guideHeight, 0, 0, scanFrame.width, scanFrame.height);
-    }
-    return scanFrame;
-  }
-
-  /** The OCR frame is already cropped to the visible guide; copy it for the picker preview. */
-  private captureScanZone(scanFrame: HTMLCanvasElement): string {
-    const snapshot = document.createElement('canvas');
-    snapshot.width = scanFrame.width;
-    snapshot.height = scanFrame.height;
-    const context = snapshot.getContext('2d');
-    if (!context) throw new Error('Unable to capture scan zone');
-    context.drawImage(scanFrame, 0, 0);
-    return snapshot.toDataURL('image/jpeg', 0.9);
+    return viewport;
   }
 
 }

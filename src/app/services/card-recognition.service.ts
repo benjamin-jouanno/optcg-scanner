@@ -10,6 +10,20 @@ interface CatalogCard extends IdentifiedCard {
 interface CardRectification {
   image: HTMLCanvasElement;
   detected: boolean;
+  bounds: CardFrameBounds | null;
+}
+
+export interface CardFrameBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  corners: { x: number; y: number }[];
+}
+
+export interface CardShapeDetection {
+  cardImage: HTMLCanvasElement;
+  bounds: CardFrameBounds;
 }
 
 interface OpenCvMat {
@@ -65,16 +79,37 @@ export class CardRecognitionService {
   private readonly catalogDbName = 'grand-line-card-catalog';
   private readonly catalogStoreName = 'catalog';
   private readonly catalogCacheKey = 'all-cards-v4';
+  private trackedCorners: { x: number; y: number }[] | null = null;
+  private trackingMisses = 0;
+  private lastShapeDetectionAt = 0;
 
-  async readCardCode(frame: HTMLCanvasElement): Promise<CardCodeReading> {
+  resetCardTracking(): void {
+    this.trackedCorners = null;
+    this.trackingMisses = 0;
+    this.lastShapeDetectionAt = 0;
+  }
+
+  async detectCardShape(frame: HTMLCanvasElement): Promise<CardShapeDetection | null> {
     const rectified = await this.rectifyCard(frame);
+    if (!rectified.detected || !rectified.bounds) return null;
+    return { cardImage: rectified.image, bounds: rectified.bounds };
+  }
+
+  async readCardCode(frame: HTMLCanvasElement, focusedCode = false): Promise<CardCodeReading> {
+    const rectified = focusedCode ? { image: frame, detected: true, bounds: null } : await this.rectifyCard(frame);
     if (!rectified.detected) {
       return { code: null, name: '', rarity: null, alternateArt: false, cardDetected: false, rawText: '' };
     }
 
     const worker = await this.getWorker();
     const codeCandidates: OcrCandidate[] = [];
-    const codeRegions = [
+    const codeRegions = focusedCode ? [
+      // The guide contains the full portrait card. OCR only the printed code
+      // band near the bottom, with wider crops for alternate print layouts.
+      { x: 0.025, y: 0.87, width: 0.78, height: 0.11, mode: Tesseract.PSM.SINGLE_LINE, treatment: 'raw' as const },
+      { x: 0.025, y: 0.87, width: 0.78, height: 0.11, mode: Tesseract.PSM.SINGLE_LINE, treatment: 'binary' as const },
+      { x: 0.025, y: 0.84, width: 0.95, height: 0.14, mode: Tesseract.PSM.SINGLE_LINE, treatment: 'contrast' as const },
+    ] : [
       // The code can sit on either side of the bottom information strip depending
       // on printing and layout. Read both halves before trying the whole footer.
       { x: 0.04, y: 0.89, width: 0.46, height: 0.105, mode: Tesseract.PSM.SINGLE_LINE },
@@ -83,7 +118,7 @@ export class CardRecognitionService {
     ];
 
     for (const region of codeRegions) {
-      const crop = this.prepareRegion(rectified.image, region, 'code');
+      const crop = this.prepareRegion(rectified.image, region, 'code', 'treatment' in region ? region.treatment : 'contrast');
       await worker.setParameters({
         tessedit_pageseg_mode: region.mode,
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ',
@@ -93,6 +128,17 @@ export class CardRecognitionService {
       const { data } = await worker.recognize(crop);
       const text = data.text?.trim() ?? '';
       if (text) codeCandidates.push({ text, confidence: data.confidence ?? 0 });
+    }
+
+    if (focusedCode) {
+      const rawText = codeCandidates.map((item) => item.text).join(' / ');
+      const voted = this.voteForCode(codeCandidates);
+      let recovered: Pick<CardCodeReading, 'code' | 'rarity' | 'alternateArt'> | null = null;
+      try { recovered = await this.recoverCodeFromCatalog(codeCandidates, ''); } catch { /* OCR vote can still resolve the printed ID. */ }
+      const identifiedCode = recovered ?? voted;
+      return identifiedCode
+        ? { ...identifiedCode, name: '', cardDetected: true, rawText }
+        : { code: null, name: '', rarity: null, alternateArt: false, cardDetected: true, rawText };
     }
 
     // The name is in the lower nameplate, below the card-type line. Cropping the
@@ -136,49 +182,108 @@ export class CardRecognitionService {
     const edges = new cv.Mat();
     const dilated = new cv.Mat();
     const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
-    const hierarchy = new cv.Mat();
-    const contours = new cv.MatVector();
     let bestPoints: number[] | null = null;
     let bestScore = 0;
 
     try {
       cv.cvtColor(source, gray, cv.COLOR_RGBA2GRAY);
       cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
-      cv.Canny(blurred, edges, 45, 140);
-      cv.dilate(edges, dilated, kernel);
-      cv.findContours(dilated, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
       const frameArea = working.width * working.height;
-
-      for (let index = 0; index < contours.size(); index += 1) {
-        const contour = contours.get(index);
-        const perimeter = cv.arcLength(contour, true);
-        const approximation = new cv.Mat();
+      // Camera exposure and card sleeves change edge contrast. Search at three
+      // Canny sensitivities so a single fixed threshold does not decide detection.
+      for (const [lowThreshold, highThreshold] of [[18, 65], [40, 120], [75, 200]]) {
+        cv.Canny(blurred, edges, lowThreshold, highThreshold);
+        cv.dilate(edges, dilated, kernel);
+        const hierarchy = new cv.Mat();
+        const contours = new cv.MatVector();
         try {
-          cv.approxPolyDP(contour, approximation, perimeter * 0.025, true);
-          if (approximation.rows !== 4 || !cv.isContourConvex(approximation)) continue;
-          const area = Math.abs(cv.contourArea(approximation));
-          if (area < frameArea * 0.24 || area > frameArea * 0.98) continue;
-          const points = Array.from(approximation.data32S.slice(0, 8));
-          const ordered = this.orderCorners(points);
-          const width = (this.distance(ordered[0], ordered[1]) + this.distance(ordered[2], ordered[3])) / 2;
-          const height = (this.distance(ordered[0], ordered[3]) + this.distance(ordered[1], ordered[2])) / 2;
-          if (!width || !height) continue;
-          const ratio = width / height;
-          if (ratio < 0.48 || ratio > 0.90) continue;
-          // Prefer the largest portrait quadrilateral close to the One Piece card aspect ratio.
-          const score = area * Math.max(0.15, 1 - Math.abs(ratio - 0.70));
-          if (score > bestScore) {
-            bestScore = score;
-            bestPoints = ordered.flatMap((point) => point);
+          cv.findContours(dilated, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+          for (let index = 0; index < contours.size(); index += 1) {
+            const contour = contours.get(index);
+            const perimeter = cv.arcLength(contour, true);
+            const approximation = new cv.Mat();
+            try {
+              cv.approxPolyDP(contour, approximation, perimeter * 0.025, true);
+              if (approximation.rows !== 4 || !cv.isContourConvex(approximation)) continue;
+              const area = Math.abs(cv.contourArea(approximation));
+              if (area < frameArea * 0.025 || area > frameArea * 0.98) continue;
+              const points = Array.from(approximation.data32S.slice(0, 8));
+              const ordered = this.orderCorners(points);
+              const width = (this.distance(ordered[0], ordered[1]) + this.distance(ordered[2], ordered[3])) / 2;
+              const height = (this.distance(ordered[0], ordered[3]) + this.distance(ordered[1], ordered[2])) / 2;
+              if (!width || !height) continue;
+              const ratio = width / height;
+              if (ratio < 0.48 || ratio > 0.90) continue;
+              if (!this.hasCardLikeGeometry(ordered)) continue;
+              if (ordered.some(([x, y]) => x < 2 || y < 2 || x > working.width - 3 || y > working.height - 3)) continue;
+              const ratioFit = Math.max(0.15, 1 - Math.abs(ratio - 0.70));
+              const score = area * ratioFit;
+              if (score > bestScore) {
+                bestScore = score;
+                bestPoints = ordered.flatMap((point) => point);
+              }
+            } finally {
+              approximation.delete();
+              contour.delete();
+            }
           }
         } finally {
-          approximation.delete();
+          contours.delete();
+          hierarchy.delete();
         }
       }
 
-      // The scanner already crops to the on-screen card guide. A card filling
-      // that crop has no visible outer contour, so keep the guided frame and OCR it.
-      if (!bestPoints) return { image: frame, detected: true };
+      if (!bestPoints) {
+        this.trackingMisses += 1;
+        // Keep the outline through a couple of blurry frames caused by hand
+        // movement; the crop is still taken from the current frame.
+        if (this.trackedCorners && this.trackingMisses <= 2 && Date.now() - this.lastShapeDetectionAt < 900) {
+          bestPoints = this.trackedCorners.flatMap(({ x, y }) => [x * working.width, y * working.height]);
+        } else {
+          this.trackedCorners = null;
+          return { image: frame, detected: false, bounds: null };
+        }
+      } else {
+        const detectedCorners = Array.from({ length: 4 }, (_, index) => ({
+          x: bestPoints![index * 2] / working.width,
+          y: bestPoints![index * 2 + 1] / working.height,
+        }));
+        const canTrack = !!this.trackedCorners && Date.now() - this.lastShapeDetectionAt < 900 &&
+          this.cornersAreNear(this.trackedCorners, detectedCorners);
+        const previousWeight = canTrack ? 0.38 : 0;
+        bestPoints = detectedCorners.flatMap((corner, index) => {
+          const previous = this.trackedCorners?.[index];
+          return previous && previousWeight
+            ? [
+                (corner.x * (1 - previousWeight) + previous.x * previousWeight) * working.width,
+                (corner.y * (1 - previousWeight) + previous.y * previousWeight) * working.height,
+              ]
+            : [corner.x * working.width, corner.y * working.height];
+        });
+        this.trackedCorners = Array.from({ length: 4 }, (_, index) => ({
+          x: bestPoints![index * 2] / working.width,
+          y: bestPoints![index * 2 + 1] / working.height,
+        }));
+        this.trackingMisses = 0;
+        this.lastShapeDetectionAt = Date.now();
+      }
+
+      const cornerX = bestPoints.filter((_, index) => index % 2 === 0);
+      const cornerY = bestPoints.filter((_, index) => index % 2 === 1);
+      const left = Math.min(...cornerX);
+      const top = Math.min(...cornerY);
+      const right = Math.max(...cornerX);
+      const bottom = Math.max(...cornerY);
+      const bounds = {
+        x: left / working.width,
+        y: top / working.height,
+        width: (right - left) / working.width,
+        height: (bottom - top) / working.height,
+        corners: Array.from({ length: 4 }, (_, index) => ({
+          x: bestPoints![index * 2] / working.width,
+          y: bestPoints![index * 2 + 1] / working.height,
+        })),
+      };
 
       const outWidth = 560;
       const outHeight = 800;
@@ -192,7 +297,7 @@ export class CardRecognitionService {
       try {
         cv.warpPerspective(source, warped, transform, new cv.Size(outWidth, outHeight), cv.INTER_CUBIC, cv.BORDER_REPLICATE, new cv.Scalar());
         cv.imshow(output, warped);
-        return { image: output, detected: true };
+        return { image: output, detected: true, bounds };
       } finally {
         sourcePoints.delete();
         targetPoints.delete();
@@ -206,8 +311,6 @@ export class CardRecognitionService {
       edges.delete();
       dilated.delete();
       kernel.delete();
-      hierarchy.delete();
-      contours.delete();
     }
   }
 
@@ -224,10 +327,35 @@ export class CardRecognitionService {
     return Math.hypot(b[0] - a[0], b[1] - a[1]);
   }
 
+  private cornersAreNear(previous: { x: number; y: number }[], current: { x: number; y: number }[]): boolean {
+    const averageMovement = current.reduce((total, corner, index) =>
+      total + Math.hypot(corner.x - previous[index].x, corner.y - previous[index].y), 0) / current.length;
+    return averageMovement < 0.18;
+  }
+
+  private hasCardLikeGeometry(points: [number, number][]): boolean {
+    const sides = points.map((point, index) => this.distance(point, points[(index + 1) % 4]));
+    const widthRatio = Math.max(sides[0], sides[2]) / Math.max(1, Math.min(sides[0], sides[2]));
+    const heightRatio = Math.max(sides[1], sides[3]) / Math.max(1, Math.min(sides[1], sides[3]));
+    if (widthRatio > 1.8 || heightRatio > 1.8) return false;
+    return points.every((corner, index) => {
+      const previous = points[(index + 3) % 4];
+      const next = points[(index + 1) % 4];
+      const first = [previous[0] - corner[0], previous[1] - corner[1]];
+      const second = [next[0] - corner[0], next[1] - corner[1]];
+      const denominator = Math.hypot(...first) * Math.hypot(...second);
+      if (!denominator) return false;
+      const cosine = Math.max(-1, Math.min(1, (first[0] * second[0] + first[1] * second[1]) / denominator));
+      const angle = Math.acos(cosine) * 180 / Math.PI;
+      return angle >= 55 && angle <= 125;
+    });
+  }
+
   private prepareRegion(
     source: HTMLCanvasElement,
     region: { x: number; y: number; width: number; height: number },
     kind: 'code' | 'name',
+    treatment: 'raw' | 'contrast' | 'binary' = 'contrast',
   ): HTMLCanvasElement {
     const sx = Math.round(source.width * region.x);
     const sy = Math.round(source.height * region.y);
@@ -247,18 +375,54 @@ export class CardRecognitionService {
     context.drawImage(source, sx, sy, sw, sh, border, border, canvas.width - border * 2, canvas.height - border * 2);
 
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    const binaryThreshold = treatment === 'binary' ? this.otsuThreshold(pixels.data) : 158;
     for (let index = 0; index < pixels.data.length; index += 4) {
       const gray = pixels.data[index] * 0.299 + pixels.data[index + 1] * 0.587 + pixels.data[index + 2] * 0.114;
       const contrast = kind === 'code'
         ? Math.max(0, Math.min(255, (gray - 128) * 1.55 + 128))
         : Math.max(0, Math.min(255, (gray - 128) * 1.25 + 128));
-      pixels.data[index] = contrast;
-      pixels.data[index + 1] = contrast;
-      pixels.data[index + 2] = contrast;
+      // The focused crop often has pale lettering on a dark red footer.
+      // Binarizing one pass gives Tesseract crisp character edges; retain a
+      // grayscale pass too for low contrast or reflective cards.
+      const value = treatment === 'binary' ? (contrast > binaryThreshold ? 255 : 0) : treatment === 'raw' ? gray : contrast;
+      pixels.data[index] = value;
+      pixels.data[index + 1] = value;
+      pixels.data[index + 2] = value;
       pixels.data[index + 3] = 255;
     }
     context.putImageData(pixels, 0, 0);
     return canvas;
+  }
+
+  private otsuThreshold(pixels: Uint8ClampedArray): number {
+    const histogram = new Array<number>(256).fill(0);
+    let total = 0;
+    let weightedTotal = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      const gray = Math.max(0, Math.min(255, Math.round((pixels[index] * 0.299 + pixels[index + 1] * 0.587 + pixels[index + 2] * 0.114 - 128) * 1.55 + 128)));
+      histogram[gray] += 1;
+      weightedTotal += gray;
+      total += 1;
+    }
+    let backgroundWeight = 0;
+    let backgroundSum = 0;
+    let bestVariance = -1;
+    let threshold = 158;
+    for (let level = 0; level < histogram.length; level += 1) {
+      backgroundWeight += histogram[level];
+      if (!backgroundWeight) continue;
+      const foregroundWeight = total - backgroundWeight;
+      if (!foregroundWeight) break;
+      backgroundSum += level * histogram[level];
+      const backgroundMean = backgroundSum / backgroundWeight;
+      const foregroundMean = (weightedTotal - backgroundSum) / foregroundWeight;
+      const variance = backgroundWeight * foregroundWeight * (backgroundMean - foregroundMean) ** 2;
+      if (variance > bestVariance) {
+        bestVariance = variance;
+        threshold = level;
+      }
+    }
+    return threshold;
   }
 
   private voteForCode(candidates: OcrCandidate[]): Pick<CardCodeReading, 'code' | 'rarity' | 'alternateArt'> | null {
@@ -285,12 +449,12 @@ export class CardRecognitionService {
         .replace(/[\u2014\u2013\u2212_]/g, '-')
         .replace(/\b[0OQ6]P(?=\s*\d)/g, 'OP')
         .replace(/\s+/g, ' ');
-      const setMatch = normalized.match(/\b(OP|ST|EB|PRB)\s*-?\s*([0-9OQ]{1,2})\s*-?\s*([0-9OQIL]{3})\b/);
-      const promoMatch = normalized.match(/\b(P|DON)\s*-?\s*([0-9OQIL]{3})\b/);
+      const setMatch = normalized.match(/\b(OP|ST|EB|PRB)\s*-?\s*([0-9OQSBZ]{1,2})\s*-?\s*([0-9OQILSBZ]\s*[0-9OQILSBZ]\s*[0-9OQILSBZ])\b/);
+      const promoMatch = normalized.match(/\b(P|DON)\s*-?\s*([0-9OQILSBZ]\s*[0-9OQILSBZ]\s*[0-9OQILSBZ])\b/);
       if (setMatch) {
         return [{
-          set: `${setMatch[1]}${setMatch[2].replace(/[OQ]/g, '0').padStart(2, '0')}`,
-          number: setMatch[3].replace(/[OQ]/g, '0').replace(/[IL]/g, '1'),
+          set: `${setMatch[1]}${this.normalizeOcrDigits(setMatch[2]).padStart(2, '0')}`,
+          number: this.normalizeOcrDigits(setMatch[3]),
           alternateArt: Boolean(this.parseReading(candidate.text)?.alternateArt),
           confidence: candidate.confidence,
         }];
@@ -298,7 +462,7 @@ export class CardRecognitionService {
       if (promoMatch) {
         return [{
           set: promoMatch[1],
-          number: promoMatch[2].replace(/[OQ]/g, '0').replace(/[IL]/g, '1'),
+          number: this.normalizeOcrDigits(promoMatch[2]),
           alternateArt: Boolean(this.parseReading(candidate.text)?.alternateArt),
           confidence: candidate.confidence,
         }];
@@ -355,19 +519,19 @@ export class CardRecognitionService {
 
   private parseReading(rawText: string): Pick<CardCodeReading, 'code' | 'rarity' | 'alternateArt'> | null {
     const normalized = rawText.toUpperCase()
-      .replace(/[—–−_]/g, '-')
-      .replace(/[|!]/g, 'I')
+      .replace(/[\u2010-\u2015\u2212_]/g, '-')
+      .replace(/[|!]/g, '1')
       .replace(/\b[0OQ6]P(?=\s*\d)/g, 'OP')
       .replace(/\s+/g, ' ');
-    const setMatch = normalized.match(/\b(OP|ST|EB|PRB)\s*-?\s*([0-9OQ]{1,2})\s*-?\s*([0-9OQIL]{1,3})\b/);
-    const promoMatch = normalized.match(/\b(P|DON)\s*-?\s*([0-9OQIL]{1,3})\b/);
+    const setMatch = normalized.match(/\b(OP|ST|EB|PRB)\s*-?\s*([0-9OQSBZ]{1,2})\s*-?\s*([0-9OQILSBZ]\s*[0-9OQILSBZ]\s*[0-9OQILSBZ])\b/);
+    const promoMatch = normalized.match(/\b(P|DON)\s*-?\s*([0-9OQILSBZ]\s*[0-9OQILSBZ]\s*[0-9OQILSBZ])\b/);
     let code: string | null = null;
     if (setMatch) {
-      const setNumber = setMatch[2].replace(/[OQ]/g, '0');
-      const cardNumber = setMatch[3].replace(/[OQ]/g, '0').replace(/[IL]/g, '1').padStart(3, '0');
+      const setNumber = this.normalizeOcrDigits(setMatch[2]);
+      const cardNumber = this.normalizeOcrDigits(setMatch[3]);
       code = `${setMatch[1]}${setNumber}-${cardNumber}`;
     } else if (promoMatch) {
-      const cardNumber = promoMatch[2].replace(/[OQ]/g, '0').replace(/[IL]/g, '1').padStart(3, '0');
+      const cardNumber = this.normalizeOcrDigits(promoMatch[2]);
       code = `${promoMatch[1]}-${cardNumber}`;
     }
     if (!code) return null;
@@ -381,6 +545,11 @@ export class CardRecognitionService {
       .map((line) => line.replace(/[^A-Z0-9 .'-]/gi, ' ').replace(/\s+/g, ' ').trim())
       .filter((line) => line.length >= 3 && !/^(LEADER|CHARACTER|EVENT|STAGE|LIFE|POWER|COST)$/i.test(line))
       .sort((a, b) => b.replace(/[^A-Z0-9]/gi, '').length - a.replace(/[^A-Z0-9]/gi, '').length)[0] ?? '';
+  }
+
+  private normalizeOcrDigits(value: string): string {
+    return value.replace(/\s/g, '').replace(/[OQ]/g, '0').replace(/[IL]/g, '1')
+      .replace(/S/g, '5').replace(/B/g, '8').replace(/Z/g, '2');
   }
 
   async findCard(code: string, recognizedName = '', requireNameMatch = false): Promise<IdentifiedCard | null> {

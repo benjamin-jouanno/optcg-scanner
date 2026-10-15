@@ -34,6 +34,11 @@ yarn-error.log
 .sass-cache/
 /connect.lock
 /coverage
+/training/.venv/
+/training/.cache/
+/training/data/
+__pycache__/
+*.py[cod]
 /libpeerconnection.log
 testem.log
 /typings

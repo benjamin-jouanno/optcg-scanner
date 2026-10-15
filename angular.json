@@ -22,6 +22,26 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "ort-wasm-simd-threaded.mjs",
+                "input": "node_modules/onnxruntime-web/dist",
+                "output": "assets/onnxruntime"
+              },
+              {
+                "glob": "ort-wasm-simd-threaded.wasm",
+                "input": "node_modules/onnxruntime-web/dist",
+                "output": "assets/onnxruntime"
+              },
+              {
+                "glob": "ort-wasm-simd-threaded.jsep.mjs",
+                "input": "node_modules/onnxruntime-web/dist",
+                "output": "assets/onnxruntime"
+              },
+              {
+                "glob": "ort-wasm-simd-threaded.jsep.wasm",
+                "input": "node_modules/onnxruntime-web/dist",
+                "output": "assets/onnxruntime"
               }
             ],
             "styles": [

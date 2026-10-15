@@ -19,6 +19,7 @@
     "@angular/router": "^22.2.0",
     "@lucide/angular": "^1.57.0",
     "@techstark/opencv-js": "^5.0.0-release.1",
+    "onnxruntime-web": "^1.30.0",
     "rxjs": "~7.8.0",
     "tesseract.js": "^7.0.0",
     "tslib": "^2.3.0"
