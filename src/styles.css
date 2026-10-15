@@ -132,6 +132,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid #76cbe4; outline-
 .card-edit-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-top: 17px; }
 .card-edit-fields label { display: grid; gap: 5px; color: #9eafb5; font-size: 8px; }
 .card-edit-fields input, .card-edit-fields select { width: 100%; min-width: 0; height: 34px; padding: 0 8px; color: #e7efef; background: rgba(3,12,17,.48); border: 1px solid rgba(166,196,213,.14); border-radius: 5px; font: inherit; font-size: 9px; }
+.quantity-edit-stepper { display: grid; grid-template-columns: 34px minmax(0,1fr) 34px; gap: 5px; }
+.quantity-edit-stepper button { display: grid; height: 34px; place-items: center; color: #c9e6ec; background: rgba(45,91,105,.34); border: 1px solid rgba(121,186,209,.24); border-radius: 5px; font: inherit; font-size: 15px; cursor: pointer; }
+.quantity-edit-stepper button:hover:not(:disabled) { background: rgba(63,124,142,.48); border-color: rgba(121,186,209,.52); }
+.quantity-edit-stepper button:disabled { opacity: .42; cursor: not-allowed; }
+.quantity-edit-stepper input { text-align: center; }
 .card-edit-fields select option { color: #eaf0ef; background: #10202a; }
 .card-edit-actions { display: flex; justify-content: end; gap: 7px; margin-top: 14px; }
 .card-edit-actions .primary-button { padding: 8px 11px; font-size: 9px; }
@@ -198,11 +203,11 @@ app-collection-card-tile > .collection-card-tile { width: 100%; height: 100%; as
 @keyframes treasure-orbit { to { stroke-dashoffset: -100; } }
 @keyframes treasure-orbit-second { to { stroke-dashoffset: -50; } }
 @media (prefers-reduced-motion: reduce) { .hit-orbit rect { animation: none; } }
-.collection-card-art { position: absolute; inset: 0; display: block; overflow: hidden; background: transparent; border: 0; }
+.collection-card-art { position: absolute; z-index: 1; inset: 0; display: block; overflow: hidden; background: transparent; border: 0; }
 .collection-card-art > img { display: block; width: 100%; height: 100%; object-fit: cover; background: transparent; }
 .collection-card-placeholder { display: grid; width: 100%; height: 100%; align-content: center; justify-items: center; gap: 9px; color: #7daebd; background: radial-gradient(ellipse at 50% 34%,rgba(73,144,168,.2),transparent 50%),linear-gradient(145deg,#12242c,#0b141b); }
 .collection-card-placeholder small { color: #8fa9b1; font-size: 8px; }
-.collection-quantity { position: absolute; top: 8px; left: 8px; padding: 4px 6px; color: #f3e6c0; background: rgba(7,14,18,.82); border: 1px solid rgba(235,214,164,.32); border-radius: 5px; font-size: 8px; font-weight: 750; }
+.collection-quantity { position: absolute; z-index: 3; top: 8px; left: 8px; padding: 3px 6px; color: #e3edf0; background: rgba(7,14,18,.72); border: 1px solid rgba(210,228,233,.2); border-radius: 999px; font-size: 7px; font-weight: 700; }
 .collection-top-badges { position: absolute; z-index: 2; top: 8px; right: 8px; display: flex; max-width: calc(100% - 56px); align-items: center; gap: 4px; }
 .collection-condition-badge, .collection-card-price { position: static; min-width: 0; overflow: hidden; padding: 4px 6px; border-radius: 5px; font-size: 9px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .collection-condition-badge { color: #c9f0d2; background: rgba(7,20,14,.86); border: 1px solid rgba(133,210,154,.35); }

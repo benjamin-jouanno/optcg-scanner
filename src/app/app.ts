@@ -99,6 +99,7 @@ export class App implements OnDestroy {
   readonly manualChoiceFinish = signal<CardFinish>('Standard');
   readonly scanFinish = signal<CardFinish>('Standard');
   readonly showHitsOnly = signal(false);
+  readonly showDuplicatesOnly = signal(false);
   readonly selectedExtension = signal('all');
   readonly priceSortDirection = signal<'asc' | 'desc' | null>(null);
   editAlternateArt = false;
@@ -209,8 +210,9 @@ export class App implements OnDestroy {
     const cards = this.collectionCards().filter((card) => {
       const matchesSearch = !query || `${card.name} ${card.code}`.toLocaleLowerCase().includes(query);
       const matchesHitFilter = !this.showHitsOnly() || this.isHit(card);
+      const matchesDuplicateFilter = !this.showDuplicatesOnly() || card.quantity > 1;
       const matchesExtension = this.selectedExtension() === 'all' || this.getExtensionCode(card.code) === this.selectedExtension();
-      return matchesSearch && matchesHitFilter && matchesExtension;
+      return matchesSearch && matchesHitFilter && matchesDuplicateFilter && matchesExtension;
     });
     const direction = this.priceSortDirection();
     if (direction) {
@@ -532,6 +534,11 @@ export class App implements OnDestroy {
     this.editingCardId.set(null);
   }
 
+  adjustEditQuantity(amount: number): void {
+    const current = Number.isFinite(this.editQuantity) ? this.editQuantity : 1;
+    this.editQuantity = Math.min(100000, Math.max(1, current + amount));
+  }
+
   async saveCardEdits(): Promise<void> {
     const card = this.selectedCard();
     if (!card) return;
@@ -556,8 +563,9 @@ export class App implements OnDestroy {
     };
     await this.saveCollection(this.collectionCards().map((item) => item.id === card.id ? updated : item));
     if (this.storageError()) return;
-    this.selectedCard.set(updated);
-    this.scanSessionCards.update((cards) => cards.map((item) => item.id === updated.id ? updated : item));
+    const savedCard = this.collectionCards().find((item) => this.duplicateCardKey(item) === this.duplicateCardKey(updated)) ?? updated;
+    this.selectedCard.set(savedCard);
+    this.scanSessionCards.update((cards) => cards.map((item) => item.id === card.id ? savedCard : item));
     this.editingCardId.set(null);
     this.showNotice('Les détails de la carte ont été mis à jour.');
   }
@@ -945,8 +953,10 @@ export class App implements OnDestroy {
           // The migration key is optional; IndexedDB remains the source of truth.
         }
       }
-      this.collectionCards.set(cards);
-      if (cards.some((card) => this.needsMarketPriceRefresh(card))) void this.refreshCollectionPrices(true);
+      const mergedCards = this.mergeDuplicateCards(cards);
+      this.collectionCards.set(mergedCards);
+      if (mergedCards.length !== cards.length) await this.storage.save(mergedCards);
+      if (mergedCards.some((card) => this.needsMarketPriceRefresh(card))) void this.refreshCollectionPrices(true);
     } catch (error) {
       this.storageError.set(error instanceof Error ? error.message : 'Le stockage local est indisponible.');
     } finally {
@@ -994,13 +1004,49 @@ export class App implements OnDestroy {
   private async saveCollection(cards: CollectionCard[]): Promise<void> {
     this.storageError.set('');
     try {
-      const sorted = [...cards].sort((a, b) => b.addedAt.localeCompare(a.addedAt));
+      const sorted = this.mergeDuplicateCards(cards).sort((a, b) => b.addedAt.localeCompare(a.addedAt));
       await this.storage.save(sorted);
       this.collectionCards.set(sorted);
     } catch (error) {
       this.storageError.set(error instanceof Error ? error.message : 'Impossible d’enregistrer la collection.');
       this.showNotice(this.storageError());
     }
+  }
+
+  private mergeDuplicateCards(cards: CollectionCard[]): CollectionCard[] {
+    const merged = new Map<string, CollectionCard>();
+    const unkeyed: CollectionCard[] = [];
+    for (const card of cards) {
+      const key = this.duplicateCardKey(card);
+      if (!key) {
+        unkeyed.push(card);
+        continue;
+      }
+      const existing = merged.get(key);
+      if (!existing) {
+        merged.set(key, card);
+        continue;
+      }
+      merged.set(key, {
+        ...existing,
+        quantity: existing.quantity + card.quantity,
+        favorite: existing.favorite || card.favorite,
+        physicalSorted: existing.physicalSorted === true && card.physicalSorted === true,
+        marketPrice: existing.marketPrice ?? card.marketPrice,
+        priceUpdatedAt: existing.priceUpdatedAt ?? card.priceUpdatedAt,
+        imageUrl: existing.imageUrl ?? card.imageUrl,
+        imageDataUrl: existing.imageDataUrl ?? card.imageDataUrl,
+        colors: [...new Set([...(existing.colors ?? []), ...(card.colors ?? [])])],
+        addedAt: existing.addedAt > card.addedAt ? existing.addedAt : card.addedAt,
+      });
+    }
+    return [...merged.values(), ...unkeyed];
+  }
+
+  private duplicateCardKey(card: CollectionCard): string | null {
+    const normalizedCode = card.code.trim().toUpperCase().replace(/[_\s]+/g, '-').replace(/-+/g, '-');
+    if (!normalizedCode) return null;
+    return [normalizedCode, card.variant.trim().toLowerCase(), card.finish, card.condition].join('|');
   }
 
   private newId(): string {
@@ -1236,7 +1282,8 @@ export class App implements OnDestroy {
   }
 
   private async saveIdentifiedCard(identified: { code: string; name: string; variant: string; marketPrice: number | null; priceUpdatedAt?: string | null; imageUrl: string | null; colors?: string[] }, finish: CardFinish): Promise<void> {
-    const existing = this.collectionCards().find((card) => card.code.toUpperCase() === identified.code.toUpperCase() && card.finish === finish && card.variant === identified.variant);
+    const normalizedCode = identified.code.trim().toUpperCase().replace(/[_\s]+/g, '-').replace(/-+/g, '-');
+    const existing = this.collectionCards().find((card) => card.code.trim().toUpperCase().replace(/[_\s]+/g, '-').replace(/-+/g, '-') === normalizedCode && card.finish === finish && card.variant === identified.variant);
     const now = new Date().toISOString();
     const updated: CollectionCard = existing
       ? { ...existing, quantity: existing.quantity + 1, physicalSorted: false, marketPrice: identified.marketPrice ?? existing.marketPrice, priceUpdatedAt: identified.priceUpdatedAt ?? existing.priceUpdatedAt, imageUrl: identified.imageUrl ?? existing.imageUrl, imageDataUrl: identified.imageUrl ? null : existing.imageDataUrl, colors: identified.colors?.length ? identified.colors : existing.colors, addedAt: now }

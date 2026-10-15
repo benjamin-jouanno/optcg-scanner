@@ -37,6 +37,7 @@ export class OrganizationPage implements OnInit {
   readonly selectedExtension = signal<string | null>(null);
   readonly selectedColorKey = signal<string | null>(null);
   readonly selectedHits = signal(false);
+  readonly duplicatesOnly = signal(false);
   readonly sortModalOpen = signal(false);
   readonly selectedUnsortedIds = signal<string[]>([]);
   readonly savingSortedCards = signal(false);
@@ -55,7 +56,7 @@ export class OrganizationPage implements OnInit {
 
   get extensionGroups(): ExtensionGroup[] {
     const extensions = new Map<string, Map<string, { colors: string[]; cards: CollectionCard[] }>>();
-    for (const card of this.context.collectionCards().filter((item) => !this.context.isHit(item))) {
+    for (const card of this.context.collectionCards().filter((item) => !this.context.isHit(item) && (!this.duplicatesOnly() || item.quantity > 1))) {
       const extension = this.extensionFor(card.code);
       const colors = this.cardColors(card);
       const colorKey = colors.length ? colors.map((color) => color.toLocaleLowerCase()).sort((a, b) => COLOR_ORDER.indexOf(a) - COLOR_ORDER.indexOf(b)).join('+') : 'unknown';
@@ -91,8 +92,19 @@ export class OrganizationPage implements OnInit {
 
   get hitCards(): CollectionCard[] {
     return this.context.collectionCards()
-      .filter((card) => this.context.isHit(card))
+      .filter((card) => this.context.isHit(card) && (!this.duplicatesOnly() || card.quantity > 1))
       .sort((a, b) => this.extensionFor(a.code).localeCompare(this.extensionFor(b.code), 'fr', { numeric: true }) || this.cardNumber(a.code).localeCompare(this.cardNumber(b.code), 'fr', { numeric: true }));
+  }
+
+  get duplicateQuantity(): number {
+    return this.context.collectionCards().filter((card) => card.quantity > 1).reduce((sum, card) => sum + card.quantity, 0);
+  }
+
+  get displayedQuantity(): number {
+    if (this.selectedHits()) return this.hitQuantity;
+    if (this.selectedColorGroup) return this.selectedColorGroup.cardCount;
+    if (this.selectedExtensionGroup) return this.selectedExtensionGroup.cardCount;
+    return this.duplicatesOnly() ? this.duplicateQuantity : this.context.totalQuantity;
   }
 
   get hitQuantity(): number {

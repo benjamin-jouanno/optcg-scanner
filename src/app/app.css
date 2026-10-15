@@ -631,6 +631,13 @@ to { transform: rotate(360deg); }
 .app-shell[data-theme='light'] .collection-condition-badge { color: var(--light-success); background: rgba(242,250,243,.96); border-color: rgba(46,117,69,.28); }
 .app-shell[data-theme='light'] .collection-card-price { color: var(--light-gold); background: rgba(255,249,231,.97); border-color: rgba(139,101,23,.26); }
 .app-shell[data-theme='light'] .collection-quantity { color: var(--light-text-primary); background: rgba(255,255,255,.96); border-color: var(--light-border); }
+.app-shell[data-theme='light'] .collection-hit-filter { color: var(--light-text-secondary); background: var(--light-surface-raised); border-color: var(--light-border); }
+.app-shell[data-theme='light'] .collection-hit-filter:has(input:checked) { color: var(--light-accent-strong); background: var(--light-accent-soft); border-color: var(--light-accent); }
+.app-shell[data-theme='light'] .collection-hit-filter input { background: #fff; border-color: var(--light-border); }
+.app-shell[data-theme='light'] .collection-hit-filter input:checked { background: var(--light-accent); border-color: var(--light-accent); }
+.app-shell[data-theme='light'] .collection-hit-filter input:checked::before { border-color: #fff; }
+.app-shell[data-theme='light'] .quantity-edit-stepper button { color: var(--light-text-primary); background: var(--light-surface-inset); border-color: var(--light-border); }
+.app-shell[data-theme='light'] .quantity-edit-stepper button:hover:not(:disabled) { background: var(--light-accent-soft); border-color: var(--light-accent); }
 .app-shell[data-theme='light'] .collection-card-meta {
   color: var(--light-text-primary);
   background: linear-gradient(180deg,rgba(255,255,255,.84),rgba(255,255,255,.97));

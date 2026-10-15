@@ -9,8 +9,9 @@
 <section class="organization-workspace">
   <div class="organization-main">
     <div class="organization-section-heading">
-      <div><div class="section-kicker">TES PILES</div><h2>@if (selectedColorGroup) { {{ selectedColorGroup.label }} } @else if (selectedHits()) { Hits } @else if (selectedExtensionGroup) { {{ selectedExtensionGroup.code }} } @else { Extensions }</h2><span class="organization-selection-count">{{ selectedHits() ? hitQuantity : selectedColorGroup?.cardCount ?? selectedExtensionGroup?.cardCount ?? context.totalQuantity }} cartes à organiser</span></div>
+      <div><div class="section-kicker">TES PILES</div><h2>@if (selectedColorGroup) { {{ selectedColorGroup.label }} } @else if (selectedHits()) { Hits } @else if (selectedExtensionGroup) { {{ selectedExtensionGroup.code }} } @else { Extensions }</h2><span class="organization-selection-count">{{ displayedQuantity }} cartes à organiser</span></div>
       <div class="organization-header-actions">
+        <label class="collection-hit-filter organization-duplicate-filter"><input type="checkbox" [checked]="duplicatesOnly()" (change)="duplicatesOnly.set($any($event.target).checked)" /> Doublons uniquement</label>
         <button class="organization-sort-button" type="button" (click)="openSortModal()">Trier les cartes récemment ajoutées <span>{{ unsortedQuantity }}</span></button>
         @if (selectedExtension() || selectedHits()) { <button class="organization-back-button" type="button" (click)="goBack()"><svg lucideArrowRight [size]="13"></svg>{{ selectedHits() ? 'Toutes les extensions' : selectedColorKey() ? 'Couleurs de ' + selectedExtension() : 'Toutes les extensions' }}</button> }
       </div>
